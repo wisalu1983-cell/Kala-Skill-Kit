@@ -21,7 +21,7 @@ cd ~/dev/Kala-Skill-Kit
 ```
 
 `install.sh` 会:
-- **Claude Code**(`~/.claude`)→ `~/.claude/skills/`
+- **Claude Code**(`${CLAUDE_CONFIG_DIR:-~/.claude}`)→ 该目录下的 `skills/`。注意:Compass/企业版会用 `CLAUDE_CONFIG_DIR` 把配置目录改到别处(如 `~/.claude-compass`),installer 会自动认这个环境变量,装到它读的地方,而不是默认的 `~/.claude`。
 - **Codex**(`~/.codex`)→ `$CODEX_HOME/skills`(默认 `~/.codex/skills`,Codex 自带的 skill-installer/skill-creator 即从这里自动发现 skill)
 - **OpenClaw**(`~/.openclaw`)→ `~/.openclaw/skills/`
 - **Cursor**(`~/.cursor`)→ 生成自包含的 `commands/kala-handoff.md`、`kala-resume.md`(内容同源)

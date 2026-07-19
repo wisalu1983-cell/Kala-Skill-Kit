@@ -38,9 +38,10 @@ install_as_cursor() {
   summary+=("✓ Cursor       →  $dest (kala-handoff.md, kala-resume.md)")
 }
 
-# --- Claude Code ---
-if [ -d "$HOME/.claude" ]; then install_as_skills "Claude Code" "$HOME/.claude"
-else summary+=("– Claude Code  未发现 ~/.claude,跳过"); fi
+# --- Claude Code(尊重 CLAUDE_CONFIG_DIR;Compass/企业版会把配置目录改到别处,如 ~/.claude-compass)---
+CLAUDE_BASE="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+if [ -d "$CLAUDE_BASE" ]; then install_as_skills "Claude Code" "$CLAUDE_BASE"
+else summary+=("– Claude Code  未发现 $CLAUDE_BASE,跳过"); fi
 
 # --- Codex(自带的 skill-installer/skill-creator 确认:从 $CODEX_HOME/skills 自动发现,默认 ~/.codex/skills)---
 if [ -d "$HOME/.codex" ]; then
