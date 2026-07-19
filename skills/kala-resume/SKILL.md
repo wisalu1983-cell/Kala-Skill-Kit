@@ -1,5 +1,5 @@
 ---
-name: resume
+name: kala-resume
 description: 从项目 .handoff/ 目录恢复上一段工作。换设备/换 agent 后接手用。先 git pull,按话题链列出交接文档让用户选,复述理解后再动手。只读,不改动交接记录。
 argument-hint: "[可选:话题名或文件名,指定要接哪条]"
 allowed-tools: Bash, Read, Glob
@@ -17,7 +17,7 @@ git -C "$ROOT" pull -q 2>/dev/null   # 有远程才拉,失败不阻塞
 date "+%Y-%m-%d %H:%M:%S %Z"          # 真实时间,用于判断「几天前」等
 ls -t "$ROOT/.handoff/"/HANDOFF_*.md 2>/dev/null   # 按修改时间倒序
 ```
-若 `.handoff/` 不存在或为空:告知「本项目还没有交接文档,可能上一台设备没跑 `/handoff`」,结束。
+若 `.handoff/` 不存在或为空:告知「本项目还没有交接文档,可能上一台设备没跑 `/kala-handoff`」,结束。
 
 ## 步骤 2:选定要接哪条——不默认「最新那条就是」
 
@@ -49,4 +49,4 @@ ls -t "$ROOT/.handoff/"/HANDOFF_*.md 2>/dev/null   # 按修改时间倒序
 
 ## 只读原则
 
-本流程**绝不**修改、清空、删除任何交接文档。交接记录是历史,保留。接手后的新进展,由用户下次显式跑 `/handoff` 另写新一棒。
+本流程**绝不**修改、清空、删除任何交接文档。交接记录是历史,保留。接手后的新进展,由用户下次显式跑 `/kala-handoff` 另写新一棒。

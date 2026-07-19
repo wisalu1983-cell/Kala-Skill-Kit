@@ -5,7 +5,7 @@ set -euo pipefail
 
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$KIT_DIR/skills"
-SKILLS=(handoff resume)
+SKILLS=(kala-handoff kala-resume)
 
 # 去掉一个 md 文件开头的 YAML frontmatter(两个 --- 之间),给不吃 frontmatter 的工具用
 strip_fm() { awk 'seen<2 { if ($0=="---") seen++; next } { print }' "$1"; }
@@ -30,12 +30,12 @@ install_as_cursor() {
   local dest="$base/commands"
   mkdir -p "$dest"
   {
-    strip_fm "$SRC/handoff/SKILL.md"
+    strip_fm "$SRC/kala-handoff/SKILL.md"
     echo; echo "---"; echo "# 附:交接文档模板(上文步骤 4/5 引用的 TEMPLATE)"; echo
-    cat "$SRC/handoff/TEMPLATE.md"
-  } > "$dest/handoff.md"
-  strip_fm "$SRC/resume/SKILL.md" > "$dest/resume.md"
-  summary+=("✓ Cursor       →  $dest (handoff.md, resume.md)")
+    cat "$SRC/kala-handoff/TEMPLATE.md"
+  } > "$dest/kala-handoff.md"
+  strip_fm "$SRC/kala-resume/SKILL.md" > "$dest/kala-resume.md"
+  summary+=("✓ Cursor       →  $dest (kala-handoff.md, kala-resume.md)")
 }
 
 # --- Claude Code ---

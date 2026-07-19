@@ -7,8 +7,10 @@
 
 | Skill | 作用 |
 |---|---|
-| **handoff** | 为长 session 写结构化交接文档,让不同设备/不同 agent 无损接手。覆盖背景、当前状态、过程(含放弃的方案)、关键决策、用户反馈原话、下一步。 |
-| **resume** | 换设备/换 agent 后,从项目 `.handoff/` 恢复上一段工作:git pull → 按话题链列出 → 复述理解 → 等确认再动手。 |
+| **kala-handoff** | 为长 session 写结构化交接文档,让不同设备/不同 agent 无损接手。覆盖背景、当前状态、过程(含放弃的方案)、关键决策、用户反馈原话、下一步。 |
+| **kala-resume** | 换设备/换 agent 后,从项目 `.handoff/` 恢复上一段工作:git pull → 按话题链列出 → 复述理解 → 等确认再动手。 |
+
+> 用 `kala-` 前缀是为了和其它来源的同名 skill(如项目 `.agents/skills/` 里的 `handoff`)区分开——同名 skill 在 Codex 等工具的选择器里不会合并、会各列一条。
 
 ## 安装
 
@@ -22,7 +24,7 @@ cd ~/dev/Kala-Skill-Kit
 - **Claude Code**(`~/.claude`)→ `~/.claude/skills/`
 - **Codex**(`~/.codex`)→ `$CODEX_HOME/skills`(默认 `~/.codex/skills`,Codex 自带的 skill-installer/skill-creator 即从这里自动发现 skill)
 - **OpenClaw**(`~/.openclaw`)→ `~/.openclaw/skills/`
-- **Cursor**(`~/.cursor`)→ 生成自包含的 `commands/handoff.md`、`resume.md`(内容同源)
+- **Cursor**(`~/.cursor`)→ 生成自包含的 `commands/kala-handoff.md`、`kala-resume.md`(内容同源)
 - 某工具本机没装 → 跳过并在小结里标出。装好后重跑脚本增量补齐,幂等。
 
 改完任何 skill,重跑 `./install.sh` 覆盖更新;跨设备就 `git pull` 后再跑。
@@ -37,8 +39,11 @@ cd ~/dev/Kala-Skill-Kit
 
 ## 用法
 
-- 工作告一段落 / 上下文快满 / 要换设备时:`/handoff`(可带话题名)
-- 换到另一设备或另一个 agent:`/resume`
+新装或改名后,**要完全重启该工具的 CLI**(skill 注册表在进程启动时建立,只 resume 旧 session 不会重新扫描)。
+
+- Claude Code:`/kala-handoff`(可带话题名)、`/kala-resume`
+- Codex:输入 `$` 提及 skill 选 `kala-handoff` / `kala-resume`,或 `/skills` 查看,或自然语言描述意图
+- OpenClaw:自然语言触发(说「做个交接 / 恢复上次进度」)
 
 ## 加新 skill
 

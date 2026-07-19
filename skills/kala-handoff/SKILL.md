@@ -1,5 +1,5 @@
 ---
-name: handoff
+name: kala-handoff
 description: 为长 session 写结构化交接文档,让不同设备/不同 agent 无损接手工作。覆盖背景、过程、现状、决策、用户反馈、下一步。跨 session 并发隔离,git 同步。
 argument-hint: "[可选:话题名或交接原因,如 landing 改版 / 上下文快满了]"
 allowed-tools: Bash, Read, Write, Edit, Glob
