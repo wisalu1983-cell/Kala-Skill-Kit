@@ -20,7 +20,7 @@ cd ~/dev/Kala-Skill-Kit
 
 `install.sh` 会:
 - **Claude Code**(`~/.claude`)→ `~/.claude/skills/`
-- **Codex**(检测 `~/.codex`)→ `~/.agents/skills/`(Codex 读的是 `.agents/skills` 标准目录,不是 `~/.codex/skills`)
+- **Codex**(`~/.codex`)→ `$CODEX_HOME/skills`(默认 `~/.codex/skills`,Codex 自带的 skill-installer/skill-creator 即从这里自动发现 skill)
 - **OpenClaw**(`~/.openclaw`)→ `~/.openclaw/skills/`
 - **Cursor**(`~/.cursor`)→ 生成自包含的 `commands/handoff.md`、`resume.md`(内容同源)
 - 某工具本机没装 → 跳过并在小结里标出。装好后重跑脚本增量补齐,幂等。

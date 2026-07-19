@@ -42,9 +42,9 @@ install_as_cursor() {
 if [ -d "$HOME/.claude" ]; then install_as_skills "Claude Code" "$HOME/.claude"
 else summary+=("– Claude Code  未发现 ~/.claude,跳过"); fi
 
-# --- Codex(检测 ~/.codex 判断是否装了 Codex,但 skill 读的是 ~/.agents/skills 标准目录)---
+# --- Codex(自带的 skill-installer/skill-creator 确认:从 $CODEX_HOME/skills 自动发现,默认 ~/.codex/skills)---
 if [ -d "$HOME/.codex" ]; then
-  install_as_skills "Codex" "$HOME/.agents"     # 装到 ~/.agents/skills
+  install_as_skills "Codex" "${CODEX_HOME:-$HOME/.codex}"
 else summary+=("– Codex        未发现 ~/.codex,跳过"); fi
 
 # --- Cursor ---
