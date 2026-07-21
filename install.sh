@@ -14,14 +14,17 @@ summary=()
 
 # 用 SKILL.md 目录结构安装(Claude Code / Codex / OpenClaw 都吃 Agent-Skills 标准)
 install_as_skills() {
-  local label="$1" base="$2"
+  local label="$1" base="$2" skip="${3:-}"   # skip: 空格分隔的、该工具不装的 skill 名
   local dest="$base/skills"
   mkdir -p "$dest"
+  local done_list=()
   for s in "${SKILLS[@]}"; do
-    rm -rf "$dest/$s"
+    rm -rf "$dest/$s"                                   # 先清旧,保证幂等(也清掉不该装的历史遗留)
+    if [[ " $skip " == *" $s "* ]]; then continue; fi   # 该工具明确不装此 skill
     cp -R "$SRC/$s" "$dest/$s"
+    done_list+=("$s")
   done
-  summary+=("✓ $label  →  $dest")
+  summary+=("✓ $label  →  $dest (${done_list[*]})")
 }
 
 # Cursor 不吃 SKILL 目录,生成自包含的 command md(去 frontmatter;handoff 内联模板)
@@ -58,7 +61,8 @@ oc=""
 for c in "$HOME/.openclaw" "$HOME/.config/openclaw" "$HOME/.open-claw"; do
   [ -d "$c" ] && oc="$c" && break
 done
-if [ -n "$oc" ]; then install_as_skills "OpenClaw" "$oc"
+# OpenClaw 自带飞书工具(feishu_doc/drive/wiki/perm),kala-feishu 对它冗余且会造成触发歧义,故明确跳过
+if [ -n "$oc" ]; then install_as_skills "OpenClaw" "$oc" "kala-feishu"
 else summary+=("– OpenClaw     未发现其配置目录,跳过(装好后重跑本脚本,或手动指目录)"); fi
 
 echo
