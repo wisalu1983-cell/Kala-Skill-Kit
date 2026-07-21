@@ -5,7 +5,7 @@ set -euo pipefail
 
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$KIT_DIR/skills"
-SKILLS=(kala-handoff kala-resume)
+SKILLS=(kala-handoff kala-resume kala-feishu)
 
 # 去掉一个 md 文件开头的 YAML frontmatter(两个 --- 之间),给不吃 frontmatter 的工具用
 strip_fm() { awk 'seen<2 { if ($0=="---") seen++; next } { print }' "$1"; }
@@ -36,6 +36,7 @@ install_as_cursor() {
   } > "$dest/kala-handoff.md"
   strip_fm "$SRC/kala-resume/SKILL.md" > "$dest/kala-resume.md"
   summary+=("✓ Cursor       →  $dest (kala-handoff.md, kala-resume.md)")
+  summary+=("–  Cursor       kala-feishu 依赖脚本目录,Cursor 不装脚本,已跳过(请用 Claude Code / Codex)")
 }
 
 # --- Claude Code(尊重 CLAUDE_CONFIG_DIR;Compass/企业版会把配置目录改到别处,如 ~/.claude-compass)---
