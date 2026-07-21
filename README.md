@@ -32,6 +32,20 @@ cd ~/dev/Kala-Skill-Kit
 
 改完任何 skill,重跑 `./install.sh` 覆盖更新;跨设备就 `git pull` 后再跑。
 
+### 选择性安装 / 预览(可选)
+
+默认 `./install.sh` 是**全量**:所有 skill → 所有探测到的工具。若某台机器只想装一部分、或想先看清楚会做什么再动手:
+
+```bash
+./install.sh --list                              # 列出可选 skill 和工具,不动手
+./install.sh --dry-run                           # 预览:只打印会装/覆盖/跳过什么,不改动任何文件
+./install.sh kala-handoff kala-resume            # 只装指定的 skill
+./install.sh --tools codex,claude                # 只装到指定工具(claude/codex/cursor/openclaw)
+./install.sh --dry-run --tools codex kala-feishu # 组合:先预览,确认后去掉 --dry-run 再真装
+```
+
+`--dry-run` 加在任何命令上都是「只看不装」;看清楚了去掉它再跑一次才真正安装。
+
 ## 设计约定(为什么这么设计)
 
 - **交接文档存在项目里,不在 `~/.claude`**:文档是你产品/设计工作的一部分,跟项目 git 库走。skill *定义*在各工具全局,交接*数据*在项目 `.handoff/`——两者解耦。
