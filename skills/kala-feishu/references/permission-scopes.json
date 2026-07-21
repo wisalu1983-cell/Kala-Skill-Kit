@@ -1,0 +1,19 @@
+{
+  "scopes": {
+    "user": [
+      "offline_access",
+      "docx:document",
+      "docx:document:readonly",
+      "docs:document:export",
+      "drive:drive",
+      "drive:drive.metadata:readonly",
+      "wiki:wiki",
+      "wiki:node:read"
+    ],
+    "tenant": [
+      "docx:document",
+      "drive:drive",
+      "wiki:wiki"
+    ]
+  }
+}

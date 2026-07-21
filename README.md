@@ -9,8 +9,11 @@
 |---|---|
 | **kala-handoff** | 为长 session 写结构化交接文档,让不同设备/不同 agent 无损接手。覆盖背景、当前状态、过程(含放弃的方案)、关键决策、用户反馈原话、下一步。 |
 | **kala-resume** | 换设备/换 agent 后,从项目 `.handoff/` 恢复上一段工作:git pull → 按话题链列出 → 复述理解 → 等确认再动手。 |
+| **kala-feishu** | 用你本人的飞书身份(OAuth)读写/管理飞书云文档与知识库(创建·写 Markdown 含表格图片·云盘目录·知识库节点)。含从零部署引导 + 自动化冒烟测试。纯 Node 脚本,零 npm 依赖。 |
 
 > 用 `kala-` 前缀是为了和其它来源的同名 skill(如项目 `.agents/skills/` 里的 `handoff`)区分开——同名 skill 在 Codex 等工具的选择器里不会合并、会各列一条。
+
+> **kala-feishu 说明**:它带 `scripts/`(纯 Node,零 npm 依赖)+ `references/`。skill 定义随 git 走;**运行期数据(App 凭证 / OAuth token / 目标位置)落在仓库外的 `~/.kala/feishu/`,不进 git**。每台设备首次用需部署一次(写凭证 + 浏览器授权一次),skill 的 SKILL.md 会引导。Cursor 因不装脚本目录被跳过,请在 Claude Code / Codex / OpenClaw 里用。
 
 ## 安装
 
