@@ -183,4 +183,5 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "以上仅预览。确认无误后,去掉 --dry-run 再运行,才会真正安装。"
 else
   echo "装好新工具后,重跑 ./install.sh 即可增量补齐。"
+  echo "提示:支持 --list 看选项 · --dry-run 只预览不落地 · 按 skill 名 / --tools 选择性安装(详见 --help 或 AGENTS.md)。"
 fi

@@ -46,6 +46,8 @@ cd ~/dev/Kala-Skill-Kit
 
 `--dry-run` 加在任何命令上都是「只看不装」;看清楚了去掉它再跑一次才真正安装。
 
+> 如果你是**负责部署的 agent**,规则和推荐流程见 [AGENTS.md](AGENTS.md)(Claude Code 经 `CLAUDE.md` 自动读取)。
+
 ## 设计约定(为什么这么设计)
 
 - **交接文档存在项目里,不在 `~/.claude`**:文档是你产品/设计工作的一部分,跟项目 git 库走。skill *定义*在各工具全局,交接*数据*在项目 `.handoff/`——两者解耦。
