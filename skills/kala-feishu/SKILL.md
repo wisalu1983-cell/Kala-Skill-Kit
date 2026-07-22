@@ -122,6 +122,21 @@ node "$W" delete <wiki_url|node_token>                  # 删节点 ← 先向�
 
 新建知识库文档并写入:`create` 拿到 `obj_token` → 用 `write-md-to-feishu.mjs <obj_token> <file.md>` 写。
 
+### 评论(仅全文评论)
+
+```bash
+C="$SKILL_DIR/scripts/feishu-comment.mjs"
+node "$C" create  <doc_url|token> <评论文本>     # 给整篇文档建一条评论
+node "$C" list    <doc_url|token>                # 列出评论(界面里建的局部评论也能读到)
+node "$C" get     <doc_url|token> <comment_id>   # 取单条
+node "$C" resolve <doc_url|token> <comment_id>   # 标记为已解决
+```
+
+**开放 API 的硬限制(不是脚本没做):**
+- 只能建**全文评论**(整篇挂一条)。**无法锚定到某段文字建局部评论**——传 `is_whole:false`+`quote` 会被飞书强制转成全文、`quote` 丢弃。要针对某句话批注,只能人到飞书界面手动做;API 只能**读到**这类局部评论。
+- **回复评论不支持**(API 对全文评论回复返回 `1069302`)。
+- 目标传文档或知识库 URL 都行(wiki 会自动解析成底层 docx),多账号按租户自动选。
+
 ### 记住目标位置
 
 确定常用目标后记进 `~/.kala/feishu/<account>.targets.json` 复用(下次直接读):

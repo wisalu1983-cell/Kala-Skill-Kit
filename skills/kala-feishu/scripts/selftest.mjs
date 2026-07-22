@@ -227,6 +227,28 @@ async function main() {
     }
   }
 
+  // ── P6 评论(全文评论:建/列/解决)────────────────────────────
+  let commentId;
+  await run('P6.1', '评论·建全文评论', async () => {
+    const r = await api('POST', `/drive/v1/files/${docToken}/comments`, {
+      query: { file_type: 'docx' },
+      body: { is_whole: true, reply_list: { replies: [ { content: { elements: [ { type: 'text_run', text_run: { text: 'kala 自检评论' } } ] } } ] } },
+    });
+    commentId = r.comment_id;
+    return commentId;
+  });
+  await run('P6.2', '评论·列出并校验', async () => {
+    const d = await api('GET', `/drive/v1/files/${docToken}/comments`, { query: { file_type: 'docx' } });
+    if (!(d.items || []).some(c => c.comment_id === commentId)) throw new Error('列表里找不到刚建的评论');
+    return `${(d.items || []).length} 条`;
+  });
+  await run('P6.3', '评论·标记已解决', async () => {
+    await api('PATCH', `/drive/v1/files/${docToken}/comments/${commentId}`, { query: { file_type: 'docx' }, body: { is_solved: true } });
+    const d = await api('GET', `/drive/v1/files/${docToken}/comments/${commentId}`, { query: { file_type: 'docx' } });
+    if (!d.is_solved) throw new Error('标记已解决后 is_solved 仍为 false');
+    return 'solved';
+  });
+
   // ── P5 token / 错误码 ────────────────────────────────────────
   await run('P5.1', 'token·强制刷新', async () => {
     const { execFileSync } = await import('child_process');
