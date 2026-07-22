@@ -30,3 +30,5 @@
 - 运行期数据在仓库外 `~/.kala/feishu/`(App 凭证 / OAuth token / 目标位置),**不进 git,不要提交**。
 - 每台设备首次用需部署一次:写 App 凭证 + 浏览器 OAuth 授权一次。`skills/kala-feishu/SKILL.md` 有从零引导,细节见 `skills/kala-feishu/references/setup-guide.md`。
 - 部分步骤(建飞书应用、点浏览器授权、后台审权限)**只能用户本人做**,agent 只能给指引并等待。
+- **多账号 / 多租户**:一个飞书 App(= 一个租户)对应一个账号,用 `KALA_FEISHU_ACCOUNT=<名>` 区分(默认 `default`)。**文档属于哪个租户,就必须用那个租户的账号去读写**——用错账号会报 `131006 permission denied`(这是身份/租户不对,不是 token 坏了)。不确定用哪个时,`ls ~/.kala/feishu/*.config.json` 看有哪些账号,按文档 URL 的租户域名选对应的。
+- **token 保活**用 `scripts/keepalive.mjs`(遍历 `~/.kala/feishu/` 下所有账号逐个 refresh);**不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷 `default` 一个账号,别的会闲置过期。
