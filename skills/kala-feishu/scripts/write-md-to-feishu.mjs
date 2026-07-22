@@ -14,6 +14,7 @@
 import { readFileSync } from 'fs';
 import { FeishuDocWriter } from './feishu-doc-writer.mjs';
 import { getNode } from './feishu-wiki.mjs';
+import { autoSelectAccount } from './feishu-route.mjs';
 
 function parseArgs(argv) {
   const positional = [];
@@ -44,6 +45,9 @@ async function main() {
   const markdown = readFileSync(mdFile, 'utf-8');
   let { token: docToken, isWiki } = extractTarget(target);
   if (flags.has('wiki')) isWiki = true;
+
+  // 多账号时按目标 URL 的租户自动选对账号(显式 KALA_FEISHU_ACCOUNT 优先)
+  await autoSelectAccount({ url: target, wikiToken: isWiki ? docToken : undefined, docToken: isWiki ? undefined : docToken });
 
   if (isWiki) {
     const node = await getNode(docToken);

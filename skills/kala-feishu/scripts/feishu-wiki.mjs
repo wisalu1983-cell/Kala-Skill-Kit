@@ -20,6 +20,7 @@
  * ⚠️ 空间成员/管理员这类「空间级权限」需在飞书客户端/后台设置,本脚本不代做。
  */
 import { api, printResult, fail } from './feishu-api.mjs';
+import { autoSelectAccount } from './feishu-route.mjs';
 
 /** 从 wiki URL 或原始 token 里取出 node_token。 */
 export function parseWikiToken(input) {
@@ -70,6 +71,7 @@ async function main() {
     case 'resolve': {
       const nodeToken = parseWikiToken(args[0]);
       if (!nodeToken) return fail('用法: resolve <wiki_url_or_node_token>');
+      await autoSelectAccount({ url: args[0], wikiToken: nodeToken });
       const node = await getNode(nodeToken);
       return printResult({
         node_token: node.node_token, obj_token: node.obj_token,
@@ -103,6 +105,7 @@ async function main() {
     case 'delete': {
       const nodeToken = parseWikiToken(args[0]);
       if (!nodeToken) return fail('用法: delete <wiki_url_or_node_token>');
+      await autoSelectAccount({ url: args[0], wikiToken: nodeToken });
       // 解析出底层对象,删对象(进回收站,可恢复)。节点随之从知识库树移除。
       const node = await getNode(nodeToken);
       if (!node?.obj_token) return fail(`无法解析节点的 obj_token: ${nodeToken}`);

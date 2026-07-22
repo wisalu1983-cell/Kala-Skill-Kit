@@ -66,6 +66,7 @@ node "$SKILL_DIR/scripts/feishu-oauth.mjs" status
 - 拿 token 一律 `node "$SKILL_DIR/scripts/feishu-oauth.mjs" get`(自动续期)。**禁止**任何代码直接调飞书 refresh API——refresh_token 一次性,绕过管家会断链。
 - **任何删除操作前,先把待删对象列清单给用户、取得明确确认再执行。**
 - 知识库的**空间成员/管理员**这类空间级权限设置在飞书客户端做,脚本不代做;告知用户即可。
+- **多账号自动路由**:接入多个飞书组织时,传飞书 **URL** 的读/写(`feishu-wiki resolve`、`write-md-to-feishu`)会按 URL 租户域名**自动选对账号**,多组织无需手动切;要强制用某账号就设 `KALA_FEISHU_ACCOUNT=<名>`(显式优先)。`node "$SKILL_DIR/scripts/feishu-route.mjs" --list` 看有哪些账号和已学到的路由。报 `131006` = 该身份对该文档确实没权限(不是 token 坏)。
 
 ### 写入云文档
 
