@@ -18,14 +18,15 @@
       "org": "AI Game Innovation",
       "domain": "dcn3z9j3xb3g.feishu.cn",
       "app_id": "cli_aad7658ef9789d0c",
-      "app_name": "Klaw-COS"
+      "app_name": "Klaw-COS",
+      "note": "旧文档里出现的「Trumen-COS」是该组织当前在做的项目代号,指的是同一个组织,不是另一个租户"
     },
     "casualgame": {
       "org": "休闲游戏租户(mcnoxqwo573j)",
       "domain": "mcnoxqwo573j.feishu.cn",
       "app_id": "cli_a9454ea5f238dcd3",
       "app_name": "Klaw",
-      "note": "即老 Windows openclaw「小埋」用过的 bot 所在应用"
+      "note": "即老 Windows openclaw「小埋」用过的 bot 所在应用。该租户下另有一个 2026-07 前建的旧应用 cli_a90443b1d4b85cb1(老 lark-mcp 方案用),已废弃、本机零引用,应在开发者后台删除;若后台还能看到它,不要再用"
     }
   }
 }
