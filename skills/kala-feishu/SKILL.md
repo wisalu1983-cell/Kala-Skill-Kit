@@ -147,6 +147,18 @@ node "$C" resolve <doc_url|token> <comment_id>   # 标记为已解决
 node -e "import('$SKILL_DIR/scripts/feishu-config.mjs').then(m=>m.saveTargets({drive_folder:'<folder_token>', wiki_space:'<space_id>', wiki_parent:'<node_token>'}))"
 ```
 
+### 多组织权限体检
+
+接了多个飞书组织时,查各组织应用权限是否一致(真调 API 实测,不是读配置):
+
+```bash
+node "$SKILL_DIR/scripts/feishu-scope-audit.mjs"        # 全部账号
+node "$SKILL_DIR/scripts/feishu-scope-audit.mjs" --no-write  # 只做只读探测
+```
+
+会用**应用身份 / 用户身份**两种身份分别测云盘·知识库·IM·通讯录·文档写·评论·公开权限,
+并自动列出**各组织之间不一致的项**。统一方法见 `references/setup-guide.md` 的「多组织:权限统一标准与维护」。
+
 ## 排错
 
 - 权限/能力类报错(`99991672`/`99991679`)→ 后台 scope 没配全 / 没发布审核 / OAuth 没授权到,回 `references/setup-guide.md` 步骤 2、5 核对。
