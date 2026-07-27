@@ -9,7 +9,7 @@
  *
  * 用法:
  *   node feishu-scope-audit.mjs              # 体检所有账号
- *   node feishu-scope-audit.mjs default      # 只体检指定账号(可多个)
+ *   node feishu-scope-audit.mjs personal     # 只体检指定账号(可多个)
  *   node feishu-scope-audit.mjs --no-write   # 只做只读探测(不建临时文档,跳过写/评论/权限项)
  */
 import { readdirSync } from 'fs';

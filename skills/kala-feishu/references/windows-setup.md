@@ -56,7 +56,7 @@ node install.mjs              # 确认无误后真正安装
 
 ```powershell
 $skill = "$env:USERPROFILE\.claude\skills\kala-feishu"
-$env:KALA_FEISHU_ACCOUNT = "default"          # 换成目标账号名
+$env:KALA_FEISHU_ACCOUNT = "personal"         # 换成目标账号名
 node -e "import('file:///$($skill -replace '\\','/')/scripts/feishu-config.mjs').then(m=>m.saveAppCredentials('cli_xxxx','SECRET_HERE'))"
 
 node "$skill\scripts\feishu-config.mjs"        # 自检:secret 只显示长度,不回显明文
@@ -72,7 +72,7 @@ icacls "$env:USERPROFILE\.kala\feishu" /inheritance:r /grant:r "$($env:USERNAME)
 ## 步骤 4 — OAuth 授权(每个账号一次,用户本人点)
 
 ```powershell
-$env:KALA_FEISHU_ACCOUNT = "default"
+$env:KALA_FEISHU_ACCOUNT = "personal"
 node "$env:USERPROFILE\.claude\skills\kala-feishu\scripts\feishu-oauth.mjs" auth
 ```
 把打印出的链接给用户,**用户在浏览器点授权**;回调 `http://127.0.0.1:9876/callback`(回环地址,Windows 防火墙通常不拦;若被拦,放行 node.exe 的本地回环即可)。
@@ -89,7 +89,15 @@ node "$env:USERPROFILE\.claude\skills\kala-feishu\scripts\selftest.mjs"
 ## 步骤 6 — token 自动保活(替代 launchd)
 
 macOS 用 launchd,Windows 用**任务计划程序**跑同一个 `keepalive.mjs`(它会遍历所有账号)。
-PowerShell 一次性注册(**每周一 09:00**,带日志):
+
+**推荐:脚本自动注册**(内部用 `schtasks /Create`,每周一 09:00,注册后立即跑一次):
+
+```powershell
+node "$env:USERPROFILE\.claude\skills\kala-feishu\scripts\setup-keepalive.mjs"
+node "$env:USERPROFILE\.claude\skills\kala-feishu\scripts\setup-keepalive.mjs" --status
+```
+
+若脚本注册失败,再用下面的手动 PowerShell 方式(等价):
 
 ```powershell
 $node   = (Get-Command node).Source
@@ -111,7 +119,7 @@ Get-Content "$env:USERPROFILE\.kala\feishu\keepalive.log" -Tail 5
 预期日志:`保活 N 个账号: …` + 每个账号 `✅ 刷新成功`。
 
 > 为什么必须保活:refresh_token 约 30 天,某个组织长期不用就会过期、需重新浏览器授权。
-> **不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷 `default` 一个账号。
+> **不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷默认账号(`personal`)一个。
 
 ---
 

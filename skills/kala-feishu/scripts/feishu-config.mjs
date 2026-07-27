@@ -27,7 +27,7 @@ export function feishuHome() {
 }
 
 export function account() {
-  return process.env.KALA_FEISHU_ACCOUNT || 'default';
+  return process.env.KALA_FEISHU_ACCOUNT || 'personal';
 }
 
 /** 确保 home 目录存在且为 0700,返回其路径 */

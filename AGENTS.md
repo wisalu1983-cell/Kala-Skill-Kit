@@ -35,4 +35,5 @@
 - **在 Windows 上部署**:先读 `skills/kala-feishu/references/windows-setup.md`(平台差异只有三处:安装器入口 `node install.mjs`、路径/环境变量写法、保活改用**任务计划程序**而非 launchd)。脚本本体跨平台,能力与 macOS 等价。
 - 部分步骤(建飞书应用、点浏览器授权、后台审权限)**只能用户本人做**,agent 只能给指引并等待。
 - **多账号 / 多租户(自动路由)**:一个飞书 App(= 一个租户)对应一个账号。**传飞书 URL 的读写(`feishu-wiki resolve`、`write-md-to-feishu`)会按 URL 域名自动选对账号**(探测一次后记进 `~/.kala/feishu/routing.json`,下次直接命中),**通常无需手动指定**。显式设 `KALA_FEISHU_ACCOUNT=<名>` 会优先覆盖。查看账号与已学路由:`node scripts/feishu-route.mjs --list`。报 `131006 permission denied` = 该身份对该文档确实没权限(不是 token 坏)。注:非 URL 的操作(如按 `space_id` / `folder_token` 的 drive/wiki 命令)不带域名信息,跨租户时仍需显式设 `KALA_FEISHU_ACCOUNT`。
-- **token 保活**用 `scripts/keepalive.mjs`(遍历 `~/.kala/feishu/` 下所有账号逐个 refresh);**不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷 `default` 一个账号,别的会闲置过期。
+- **token 保活**:跑一次 `node scripts/setup-keepalive.mjs` 注册系统定时器(macOS→launchd,Windows→任务计划程序),每 7 天跑 `keepalive.mjs` 遍历所有账号逐个 refresh;**不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷默认账号(`personal`)一个,别的会闲置过期。
+- **换新设备 1:1 还原**:账号名册在 `skills/kala-feishu/references/accounts.json`(账号名/组织/域名/App ID,secret 不进 git、由用户从开发者后台重新复制);流程见 `setup-guide.md`「每台新设备:1:1 还原清单」。接入新组织后要把账号补登进名册。

@@ -34,6 +34,10 @@
 
 ## 步骤 4 — 写本地凭证(agent 做)
 
+> **多组织注意**:一个组织一个账号,步骤 4–5 要**每个账号各做一遍**,做之前先
+> `export KALA_FEISHU_ACCOUNT=<账号名>`(不设 = 默认账号 `personal`)。已有哪些账号见
+> `references/accounts.json`;换新设备按那份名册逐个来。
+
 agent 执行(或引导执行),把 App ID/Secret 落到本地:
 
 ```bash
@@ -73,14 +77,24 @@ node scripts/selftest.mjs
 - **知识库目标**:`node scripts/feishu-wiki.mjs spaces` 列空间 → `nodes <space_id>` 浏览 → 记 `space_id` 和目标 `parent_node_token`。
   - ⚠️ 知识库要「你能管权限」,前提是你在该空间是**管理员**;空间成员/角色设置需在飞书客户端做,脚本不代做。
 
----
-
 ## 步骤 8 — token 自动保活(agent 做,**不要跳过**)
 
 不配保活,某个组织超过 ~30 天没用,refresh_token 就过期、必须重新浏览器授权。
 `scripts/keepalive.mjs` 会遍历 `~/.kala/feishu/` 下**所有**账号逐个 refresh(新增账号自动纳入)。
 
-**macOS(launchd)** —— 写一个 LaunchAgent,每 7 天跑一次:
+**推荐:一条命令注册(跨平台)**:
+
+```bash
+node scripts/setup-keepalive.mjs            # macOS→launchd;Windows→任务计划程序;注册即跑一次
+node scripts/setup-keepalive.mjs --status   # 查看注册状态(--uninstall 取消)
+tail -5 ~/.kala/feishu/keepalive.log        # 验证:应看到「保活 N 个账号」+ 逐账号 ✅
+```
+
+它注册的 node 是「当前运行的 node」、脚本路径是「自己所在的那份副本」,幂等可重跑
+(换 node 版本 / 挪仓库后重跑一次即可)。Windows 上若注册失败,手动 PowerShell 方式见
+`windows-setup.md` 步骤 6。下面的手动方式与脚本等价,需要自定义(改周期/路径)时参考。
+
+**手动方式:macOS(launchd)** —— 写一个 LaunchAgent,每 7 天跑一次:
 
 ```bash
 KIT=~/MyProjects/Kala-Skill-Kit          # ← 改成你的仓库实际路径
@@ -115,7 +129,7 @@ sleep 3 && tail -5 ~/.kala/feishu/keepalive.log   # 预期:保活 N 个账号 + 
 **Linux**:等价地用 systemd timer 或 crontab 跑同一条命令。
 **Windows**:见 `windows-setup.md` 步骤 6(任务计划程序)。
 
-> **不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷 `default` 一个账号,其它组织仍会过期。
+> **不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷默认账号(`personal`)一个,其它组织仍会过期。
 
 ## 接入第 2、第 3 … 个组织(多租户)
 
@@ -131,6 +145,8 @@ sleep 3 && tail -5 ~/.kala/feishu/keepalive.log   # 预期:保活 N 个账号 + 
 3. 🤖 验证:`KALA_FEISHU_ACCOUNT=<新账号名> node scripts/selftest.mjs`
 4. 🤖 保活**无需改动**——`keepalive.mjs` 自动发现新账号。
 5. 🤖 跑 `node scripts/feishu-scope-plan.mjs` 看新组织与既有组织的权限差距,按输出对齐。
+6. 🤖 把新账号登记进 `references/accounts.json`(账号名/组织/域名/App ID,**不含 secret**)并提交——
+   这是换设备 1:1 还原的名册,不登记新机就不知道要建它。
 
 > 之后**传飞书 URL 的读写会按域名自动选账号**(`feishu-route.mjs`,首次探测后记进 `routing.json`),日常不用手动指定账号。
 
@@ -176,13 +192,25 @@ node scripts/feishu-scope-plan.mjs
 
 ```bash
 node scripts/feishu-scope-audit.mjs          # 体检所有账号
-node scripts/feishu-scope-audit.mjs default  # 只看某个
+node scripts/feishu-scope-audit.mjs personal # 只看某个
 node scripts/feishu-scope-audit.mjs --no-write   # 只做只读探测
 ```
 
 它对每个账号用**两种身份**分别实测(不是读配置),打对照表并**自动列出各组织不一致的项**。
 接新组织后、或怀疑权限问题时跑一次即可。
 
-## 每台新设备
+## 每台新设备:1:1 还原清单
 
-代码随 git 走;凭证/token 不随 git 走。新设备上:`./install.sh` 装 skill → 重复步骤 4–5(写凭证 + 授权一次)即可。文档归你所有,任一已授权设备都能编辑同一批文档。
+代码随 git 走;**凭证 / token / routing / targets 不随 git 走**,新设备重新生成。
+步骤 1–3(建应用/权限/回调 URL)是**组织级**的、已经做过,换设备**不用重做**。按序:
+
+1. 🤖 装 skill:克隆本仓库 → `./install.sh --dry-run` 预览 → `./install.sh`(Windows:`node install.mjs`,先读 `windows-setup.md`)→ 重启对应 CLI。
+2. 🤖→👤 打开 `references/accounts.json` 名册,**逐账号**重复步骤 4–5:
+   - `export KALA_FEISHU_ACCOUNT=<账号名>`(Windows:`$env:KALA_FEISHU_ACCOUNT="<账号名>"`)
+   - 👤 从开发者后台对应应用重新复制 App Secret 给 agent → 🤖 写凭证(步骤 4)
+   - 🤖 发起 `feishu-oauth.mjs auth` → 👤 浏览器点授权(步骤 5)
+3. 🤖 逐账号冒烟:`KALA_FEISHU_ACCOUNT=<账号名> node scripts/selftest.mjs`(步骤 6)。
+4. 🤖 注册保活:`node scripts/setup-keepalive.mjs`(步骤 8)。
+5. 🤖 体检权限一致性:`node scripts/feishu-scope-audit.mjs`——权限配置在飞书后台、跟组织走不跟设备走,理论上与原设备自动一致,跑一次确认即可。
+
+`routing.json`(域名→账号)会在使用中自动重新学习,无需迁移;`targets.json` 是可选的便利项,需要时照步骤 7 重记。文档归你所有,任一已授权设备都能编辑同一批文档。

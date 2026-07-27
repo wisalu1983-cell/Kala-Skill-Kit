@@ -77,7 +77,7 @@ export async function autoSelectAccount(o = {}) {
 
   const accts = listAccounts();
   if (accts.length <= 1) {
-    const a = accts[0] || 'default';
+    const a = accts[0] || 'personal';
     process.env.KALA_FEISHU_ACCOUNT = a;
     return { account: a, source: accts.length ? 'only' : 'default' };
   }

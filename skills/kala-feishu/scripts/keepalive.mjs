@@ -5,7 +5,7 @@
  * KALA_FEISHU_ACCOUNT),把 refresh_token 链往前续,避免闲置 30 天过期。
  * 新增账号自动纳入,无需改 launchd。
  *
- * launchd/cron 指向本脚本即可(而不是直接 `feishu-oauth.mjs refresh`——那只刷 default)。
+ * launchd/cron 指向本脚本即可(而不是直接 `feishu-oauth.mjs refresh`——那只刷默认账号一个)。
  * 用法: node keepalive.mjs
  */
 import { readdirSync } from 'fs';

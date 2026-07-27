@@ -23,7 +23,7 @@ SKILL_DIR="$HOME/.claude/skills/kala-feishu"   # ← 改成实际路径
 **Windows(PowerShell)**:`$skill = "$env:USERPROFILE\.claude\skills\kala-feishu"`,下文命令里的 `$SKILL_DIR` 换成 `$skill`;
 指定账号写 `$env:KALA_FEISHU_ACCOUNT="x"` 而不是 `KALA_FEISHU_ACCOUNT=x`。完整 Windows 部署/保活见 `references/windows-setup.md`。
 
-运行期数据(凭证/token/目标位置)在 `~/.kala/feishu/`,与本仓库、与 openclaw 都无关。可用 `KALA_FEISHU_ACCOUNT` 区分多个飞书身份(默认 `default`)。
+运行期数据(凭证/token/目标位置)在 `~/.kala/feishu/`,与本仓库、与 openclaw 都无关。可用 `KALA_FEISHU_ACCOUNT` 区分多个飞书身份(不设时用默认账号 `personal`)。
 
 ## 第 0 步:判断处于哪个阶段
 
@@ -58,14 +58,19 @@ node "$SKILL_DIR/scripts/feishu-oauth.mjs" status
    node "$SKILL_DIR/scripts/selftest.mjs"
    ```
    P0–P2、P5 必须全绿。无可写知识库空间时 P3–P4 记 SKIP(正常)。
-8. 🤖 和用户确认**目标写入位置**并记住复用(见【日常使用·记住目标】)。
-9. 🤖 **配置 token 自动保活(不要跳过)** —— 不配的话某组织 ~30 天没用就要重新授权。
-   macOS 用 launchd、Linux 用 systemd/cron、Windows 用任务计划程序,都跑同一个
-   `scripts/keepalive.mjs`(遍历所有账号)。**现成配置见 `references/setup-guide.md` 步骤 8**
-   (Windows 见 `references/windows-setup.md` 步骤 6)。
+8. 🤖 **注册 token 自动保活(不要跳过)** —— 不配的话某组织 ~30 天没用就要重新授权:
+   ```bash
+   node "$SKILL_DIR/scripts/setup-keepalive.mjs"   # macOS→launchd;Windows→任务计划程序;注册即跑一次
+   ```
+   手动/自定义方式见 `references/setup-guide.md` 步骤 8(Windows 见 `references/windows-setup.md` 步骤 6)。
+9. 🤖 和用户确认**目标写入位置**并记住复用(见【日常使用·记住目标】)。
 
 > **接第 2、第 3 个组织**:不用重搭架构,带 `KALA_FEISHU_ACCOUNT=<新名>` 重复第 5–7 步即可;
-> 保活会自动纳入新账号。详见 `references/setup-guide.md` 的「接入第 2、第 3 … 个组织」。
+> 保活会自动纳入新账号。详见 `references/setup-guide.md` 的「接入第 2、第 3 … 个组织」,
+> 并把新账号登记进 `references/accounts.json` 名册。
+>
+> **换新设备还原已有配置**(组织/应用都建过,只是换机器):不走上面全流程,
+> 按 `references/setup-guide.md`「每台新设备:1:1 还原清单」+ `references/accounts.json` 名册逐账号做。
 
 ---
 
