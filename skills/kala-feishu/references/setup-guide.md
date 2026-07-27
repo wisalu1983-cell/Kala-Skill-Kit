@@ -75,6 +75,65 @@ node scripts/selftest.mjs
 
 ---
 
+## 步骤 8 — token 自动保活(agent 做,**不要跳过**)
+
+不配保活,某个组织超过 ~30 天没用,refresh_token 就过期、必须重新浏览器授权。
+`scripts/keepalive.mjs` 会遍历 `~/.kala/feishu/` 下**所有**账号逐个 refresh(新增账号自动纳入)。
+
+**macOS(launchd)** —— 写一个 LaunchAgent,每 7 天跑一次:
+
+```bash
+KIT=~/MyProjects/Kala-Skill-Kit          # ← 改成你的仓库实际路径
+NODE=$(command -v node)
+cat > ~/Library/LaunchAgents/ai.kala.feishu.token-refresh.plist <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>ai.kala.feishu.token-refresh</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$NODE</string>
+    <string>$KIT/skills/kala-feishu/scripts/keepalive.mjs</string>
+  </array>
+  <key>StartInterval</key><integer>604800</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>$HOME/.kala/feishu/keepalive.log</string>
+  <key>StandardErrorPath</key><string>$HOME/.kala/feishu/keepalive.log</string>
+</dict>
+</plist>
+EOF
+plutil -lint ~/Library/LaunchAgents/ai.kala.feishu.token-refresh.plist
+launchctl unload ~/Library/LaunchAgents/ai.kala.feishu.token-refresh.plist 2>/dev/null
+launchctl load  ~/Library/LaunchAgents/ai.kala.feishu.token-refresh.plist
+sleep 3 && tail -5 ~/.kala/feishu/keepalive.log   # 预期:保活 N 个账号 + 每个 ✅ 刷新成功
+```
+
+> ⚠️ `$NODE` 要用**稳定的绝对路径**。若 node 装在 nvm 下(路径含版本号),升级 nvm 后 plist 会失效;
+> 建议指向一个固定位置的 node,或升级后重新生成 plist。
+
+**Linux**:等价地用 systemd timer 或 crontab 跑同一条命令。
+**Windows**:见 `windows-setup.md` 步骤 6(任务计划程序)。
+
+> **不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷 `default` 一个账号,其它组织仍会过期。
+
+## 接入第 2、第 3 … 个组织(多租户)
+
+一个飞书组织 = 一个应用 = 一个账号。加新组织**不用重做步骤 1–3 以外的架构**,只需:
+
+1. 👤 在**该组织**下重复步骤 1–3(建应用、导入 `permission-scopes.json`、登记重定向 URL)。
+2. 🤖 带账号名重复步骤 4–5:
+   ```bash
+   export KALA_FEISHU_ACCOUNT=<新账号名>      # 例:casualgame
+   node -e "import('.../feishu-config.mjs').then(m=>m.saveAppCredentials('cli_xxx','SECRET'))"
+   node scripts/feishu-oauth.mjs auth          # 用户在浏览器点授权
+   ```
+3. 🤖 验证:`KALA_FEISHU_ACCOUNT=<新账号名> node scripts/selftest.mjs`
+4. 🤖 保活**无需改动**——`keepalive.mjs` 自动发现新账号。
+5. 🤖 跑 `node scripts/feishu-scope-plan.mjs` 看新组织与既有组织的权限差距,按输出对齐。
+
+> 之后**传飞书 URL 的读写会按域名自动选账号**(`feishu-route.mjs`,首次探测后记进 `routing.json`),日常不用手动指定账号。
+
 ## 多组织:权限统一标准与维护
 
 接了多个飞书组织(一个组织 = 一个应用 = 一个账号)后,各应用的权限容易配得不一样,

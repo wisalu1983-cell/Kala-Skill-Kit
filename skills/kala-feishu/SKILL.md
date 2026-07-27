@@ -59,6 +59,13 @@ node "$SKILL_DIR/scripts/feishu-oauth.mjs" status
    ```
    P0–P2、P5 必须全绿。无可写知识库空间时 P3–P4 记 SKIP(正常)。
 8. 🤖 和用户确认**目标写入位置**并记住复用(见【日常使用·记住目标】)。
+9. 🤖 **配置 token 自动保活(不要跳过)** —— 不配的话某组织 ~30 天没用就要重新授权。
+   macOS 用 launchd、Linux 用 systemd/cron、Windows 用任务计划程序,都跑同一个
+   `scripts/keepalive.mjs`(遍历所有账号)。**现成配置见 `references/setup-guide.md` 步骤 8**
+   (Windows 见 `references/windows-setup.md` 步骤 6)。
+
+> **接第 2、第 3 个组织**:不用重搭架构,带 `KALA_FEISHU_ACCOUNT=<新名>` 重复第 5–7 步即可;
+> 保活会自动纳入新账号。详见 `references/setup-guide.md` 的「接入第 2、第 3 … 个组织」。
 
 ---
 
