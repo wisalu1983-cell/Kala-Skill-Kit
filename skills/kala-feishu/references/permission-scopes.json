@@ -1,19 +1,48 @@
 {
+  "_comment": "kala-feishu 云文档能力标准集。权限名取自真实已授权应用的 /application/v6/scopes 返回,非杜撰。用法:开发者后台 → 权限管理 → 导入 → 粘贴本文件 → 创建版本 → 发布 → 管理员审核。【已接入多个组织要对齐时】改用 scripts/feishu-scope-plan.mjs 生成「该应用的终态」文件——它会保留该应用原有的 IM 等能力,避免导入若为覆盖式而丢功能。通讯录 contact 刻意不含(2026-07 决定;真需要 open_id→姓名 / @人 / 按部门共享 时再补)。",
   "scopes": {
-    "user": [
-      "offline_access",
+    "tenant": [
+      "base:record:retrieve",
+      "bitable:app",
+      "bitable:app:readonly",
+      "docs:doc",
+      "docs:document:export",
       "docx:document",
       "docx:document:readonly",
-      "docs:document:export",
       "drive:drive",
       "drive:drive.metadata:readonly",
+      "drive:drive:readonly",
+      "drive:export:readonly",
+      "drive:file",
+      "sheets:spreadsheet",
+      "sheets:spreadsheet:readonly",
+      "slides:presentation:read",
+      "wiki:node:read",
+      "wiki:space:retrieve",
       "wiki:wiki",
-      "wiki:node:read"
+      "wiki:wiki:readonly"
     ],
-    "tenant": [
+    "user": [
+      "base:record:retrieve",
+      "bitable:app",
+      "bitable:app:readonly",
+      "docs:doc",
+      "docs:document:export",
       "docx:document",
+      "docx:document:readonly",
       "drive:drive",
-      "wiki:wiki"
+      "drive:drive.metadata:readonly",
+      "drive:drive:readonly",
+      "drive:export:readonly",
+      "drive:file",
+      "offline_access",
+      "sheets:spreadsheet",
+      "sheets:spreadsheet:readonly",
+      "slides:presentation:read",
+      "wiki:node:read",
+      "wiki:space:retrieve",
+      "wiki:wiki",
+      "wiki:wiki:readonly"
     ]
   }
 }
