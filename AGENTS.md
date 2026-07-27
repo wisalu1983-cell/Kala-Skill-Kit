@@ -12,6 +12,9 @@
 2. 预览这次会做什么(不改动任何文件):`./install.sh --dry-run [参数]`
 3. 把预览结果给用户确认后,去掉 `--dry-run` 再真正安装。
 
+**跨平台**:真正的安装逻辑在 `install.mjs`(纯 Node,三平台通用);`install.sh` 只是 macOS/Linux 的薄封装。
+**Windows 上直接用 `node install.mjs [参数]`**,参数完全一致。改安装逻辑只改 `install.mjs`,别在 `.sh` 里另写一份。
+
 选择性安装:
 - 只装某些 skill:`./install.sh kala-handoff kala-resume`
 - 只装到某些工具:`./install.sh --tools codex,claude`(可选:claude / codex / cursor / openclaw)
@@ -29,6 +32,7 @@
 
 - 运行期数据在仓库外 `~/.kala/feishu/`(App 凭证 / OAuth token / 目标位置),**不进 git,不要提交**。
 - 每台设备首次用需部署一次:写 App 凭证 + 浏览器 OAuth 授权一次。`skills/kala-feishu/SKILL.md` 有从零引导,细节见 `skills/kala-feishu/references/setup-guide.md`。
+- **在 Windows 上部署**:先读 `skills/kala-feishu/references/windows-setup.md`(平台差异只有三处:安装器入口 `node install.mjs`、路径/环境变量写法、保活改用**任务计划程序**而非 launchd)。脚本本体跨平台,能力与 macOS 等价。
 - 部分步骤(建飞书应用、点浏览器授权、后台审权限)**只能用户本人做**,agent 只能给指引并等待。
 - **多账号 / 多租户(自动路由)**:一个飞书 App(= 一个租户)对应一个账号。**传飞书 URL 的读写(`feishu-wiki resolve`、`write-md-to-feishu`)会按 URL 域名自动选对账号**(探测一次后记进 `~/.kala/feishu/routing.json`,下次直接命中),**通常无需手动指定**。显式设 `KALA_FEISHU_ACCOUNT=<名>` 会优先覆盖。查看账号与已学路由:`node scripts/feishu-route.mjs --list`。报 `131006 permission denied` = 该身份对该文档确实没权限(不是 token 坏)。注:非 URL 的操作(如按 `space_id` / `folder_token` 的 drive/wiki 命令)不带域名信息,跨租户时仍需显式设 `KALA_FEISHU_ACCOUNT`。
 - **token 保活**用 `scripts/keepalive.mjs`(遍历 `~/.kala/feishu/` 下所有账号逐个 refresh);**不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷 `default` 一个账号,别的会闲置过期。

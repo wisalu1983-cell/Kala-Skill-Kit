@@ -18,10 +18,14 @@
 ## 安装
 
 ```bash
-git clone <你的私库URL> ~/dev/Kala-Skill-Kit
-cd ~/dev/Kala-Skill-Kit
-./install.sh
+git clone <你的私库URL> ~/MyProjects/Kala-Skill-Kit
+cd ~/MyProjects/Kala-Skill-Kit
+./install.sh                 # macOS / Linux
+# Windows(PowerShell):  node install.mjs
 ```
+
+> 安装逻辑在跨平台的 `install.mjs`(纯 Node,三平台同一份);`install.sh` 只是 macOS/Linux 的薄封装,参数一致。
+> Windows 上部署 kala-feishu 见 [skills/kala-feishu/references/windows-setup.md](skills/kala-feishu/references/windows-setup.md)。
 
 `install.sh` 会:
 - **Claude Code**(`${CLAUDE_CONFIG_DIR:-~/.claude}`)→ 该目录下的 `skills/`。注意:Compass/企业版会用 `CLAUDE_CONFIG_DIR` 把配置目录改到别处(如 `~/.claude-compass`),installer 会自动认这个环境变量,装到它读的地方,而不是默认的 `~/.claude`。

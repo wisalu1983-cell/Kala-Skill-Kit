@@ -14,12 +14,14 @@ allowed-tools: Bash, Read, Write, Edit, Glob
 脚本在**本 skill 目录**的 `scripts/` 下。先确定本 skill 的安装路径,设为 `SKILL_DIR`,后续命令都用它:
 
 ```bash
-# 常见位置(按你所在工具选一个存在的):
+# macOS / Linux —— 常见位置(按你所在工具选一个存在的):
 #   Claude Code: ${CLAUDE_CONFIG_DIR:-~/.claude}/skills/kala-feishu
 #   Codex:       ${CODEX_HOME:-~/.codex}/skills/kala-feishu
-#   OpenClaw:    ~/.openclaw/skills/kala-feishu
 SKILL_DIR="$HOME/.claude/skills/kala-feishu"   # ← 改成实际路径
 ```
+
+**Windows(PowerShell)**:`$skill = "$env:USERPROFILE\.claude\skills\kala-feishu"`,下文命令里的 `$SKILL_DIR` 换成 `$skill`;
+指定账号写 `$env:KALA_FEISHU_ACCOUNT="x"` 而不是 `KALA_FEISHU_ACCOUNT=x`。完整 Windows 部署/保活见 `references/windows-setup.md`。
 
 运行期数据(凭证/token/目标位置)在 `~/.kala/feishu/`,与本仓库、与 openclaw 都无关。可用 `KALA_FEISHU_ACCOUNT` 区分多个飞书身份(默认 `default`)。
 
