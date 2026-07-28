@@ -1,7 +1,7 @@
 ---
 name: kala-feishu
-description: 用你本人的飞书身份(OAuth)读写/管理飞书云文档与知识库。能创建/写入/追加 Markdown(标题·列表·表格·代码·图片)、管理云盘目录、浏览与新建知识库节点。支持在任意机器从零部署:agent 一步步引导用户建应用、授权、验证。当用户提到「飞书文档/云文档/云盘/知识库/wiki/写进飞书/飞书目录」时触发。
-trigger_keywords: 飞书, 飞书文档, 云文档, 飞书云盘, 知识库, wiki, 写进飞书, 飞书目录, docx, 飞书表格
+description: 用你本人的飞书身份(OAuth)读写/管理飞书云文档、知识库与两类表格。能创建/写入/追加 Markdown(标题·列表·表格·代码·图片)、管理云盘目录、浏览与新建知识库节点、读写电子表格(单元格·工作表·行列)与多维表格(记录·字段)。支持在任意机器从零部署:agent 一步步引导用户建应用、授权、验证。当用户提到「飞书文档/云文档/云盘/知识库/wiki/写进飞书/飞书目录/飞书表格/多维表格」时触发。
+trigger_keywords: 飞书, 飞书文档, 云文档, 飞书云盘, 知识库, wiki, 写进飞书, 飞书目录, docx, 飞书表格, 电子表格, 多维表格, sheets, bitable, 表格数据
 allowed-tools: Bash, Read, Write, Edit, Glob
 ---
 
@@ -57,7 +57,8 @@ node "$SKILL_DIR/scripts/feishu-oauth.mjs" status
    ```bash
    node "$SKILL_DIR/scripts/selftest.mjs"
    ```
-   P0–P2、P5 必须全绿。无可写知识库空间时 P3–P4 记 SKIP(正常)。
+   P0–P2、P5–P10 必须全绿(P7/P8 表格、P9 CLI 契约、P10 体积保护与 URL 解析)。
+   无可写知识库空间时 P3–P4 记 SKIP(正常)。开发期可用 `--only P7,P8` 只跑指定阶段。
 8. 🤖 **注册 token 自动保活(不要跳过)** —— 不配的话某组织 ~30 天没用就要重新授权:
    ```bash
    node "$SKILL_DIR/scripts/setup-keepalive.mjs"   # macOS→launchd;Windows→任务计划程序;注册即跑一次
@@ -78,7 +79,7 @@ node "$SKILL_DIR/scripts/feishu-oauth.mjs" status
 
 **铁律:**
 - 拿 token 一律 `node "$SKILL_DIR/scripts/feishu-oauth.mjs" get`(自动续期)。**禁止**任何代码直接调飞书 refresh API——refresh_token 一次性,绕过管家会断链。
-- **任何删除操作前,先把待删对象列清单给用户、取得明确确认再执行。**
+- **任何删除操作前,先把待删对象列清单给用户、取得明确确认再执行。** 表格脚本的删除类命令(`delsheet`/`delrow`/`delcol`/`deltable`/`delfield`/`delrec`)已把这条写进代码:不带 `--yes` 时只打印待删内容预览并退出 1,**先把预览给用户看、拿到确认再补 `--yes` 重跑**。
 - 知识库的**空间成员/管理员**这类空间级权限设置在飞书客户端做,脚本不代做;告知用户即可。
 - **多账号自动路由**:接入多个飞书组织时,传飞书 **URL** 的读/写(`feishu-wiki resolve`、`write-md-to-feishu`)会按 URL 租户域名**自动选对账号**,多组织无需手动切;要强制用某账号就设 `KALA_FEISHU_ACCOUNT=<名>`(显式优先)。`node "$SKILL_DIR/scripts/feishu-route.mjs" --list` 看有哪些账号和已学到的路由。报 `131006` = 该身份对该文档确实没权限(不是 token 坏)。
 
@@ -151,6 +152,57 @@ node "$C" resolve <doc_url|token> <comment_id>   # 标记为已解决
 - **回复评论不支持**(API 对全文评论回复返回 `1069302`)。
 - 目标传文档或知识库 URL 都行(wiki 会自动解析成底层 docx),多账号按租户自动选。
 
+### 电子表格(Sheets)
+
+格子模型:一个电子表格里有多张工作表,区域用 A1 记法且**必须带 sheet_id 前缀**(`{sheet_id}!A1:C10`)。
+第一个参数传 token 或飞书 URL 都行(含知识库里的表格,wiki 链接会自动换成底层 token)。
+
+```bash
+S="$SKILL_DIR/scripts/feishu-sheets.mjs"
+node "$S" create   <标题> [folder_token]                    # 建表格
+node "$S" info     <token|url>                              # 元信息 + 工作表清单(拿 sheet_id)
+node "$S" read     <token|url> [sheet_id|sheet_id!A1:C10]   # 读;省略区间=读整张
+node "$S" write    <token|url> <sheet_id!A1:C10> <csv文件>  # 覆盖该区域(输出回显被覆盖的原值)
+node "$S" append   <token|url> <sheet_id> <csv文件>         # 追加到现有数据末尾,不覆盖
+node "$S" addsheet <token|url> <标题>                       # 加工作表
+node "$S" rensheet <token|url> <sheet_id> <新名>
+node "$S" delsheet <token|url> <sheet_id> --yes             # ← 先看预览再加 --yes
+node "$S" insrow   <token|url> <sheet_id> <起始行> [行数]    # 行列号从 1 数(真人视角)
+node "$S" delrow   <token|url> <sheet_id> <起始行> [行数] --yes
+node "$S" inscol   <token|url> <sheet_id> <起始列> [列数]
+node "$S" delcol   <token|url> <sheet_id> <起始列> [列数] --yes
+node "$S" clear    <token|url> <sheet_id!A1:C10>            # 清空内容(输出回显清掉的内容)
+```
+
+- **`write` 是覆盖、`append` 是追加**,两个命令语义分开,不做智能判断。想加数据别用 `write`。
+- **读大表**:`read` 默认最多返回 200 行并给出 `total`/`has_more`,续读加 `--offset 200`。
+  **要全量分析用 `--out data.csv`** —— 导出到文件,数据不进 context(几千行的表硬读会把上下文占满)。
+- 写入用 CSV;纯数字的格子会写成数字(否则飞书里没法求和),但**前导零(`007`)和超 15 位的长号码保持文本**,日期不做猜测转换。
+
+### 多维表格(Bitable)
+
+记录模型:一个多维表格 → 多张数据表 → 字段(列,有类型)+ 记录(行)。**没有格子坐标**,写入用 `{字段名: 值}`。
+
+```bash
+B="$SKILL_DIR/scripts/feishu-bitable.mjs"
+node "$B" create   <名字> [folder_token]                     # 建多维表格
+node "$B" tables   <token|url>                               # 列数据表(拿 table_id)
+node "$B" addtable <token|url> <名字>
+node "$B" deltable <token|url> <table_id> --yes              # ← 连表内记录一起没
+node "$B" fields   <token|url> <table_id>                    # 列字段(带可读类型名)
+node "$B" addfield <token|url> <table_id> <名字> <类型>       # 类型用中文名:文本/数字/单选/多选/日期/复选框/人员/电话/超链接/附件
+node "$B" delfield <token|url> <table_id> <field_id> --yes   # ← 整列数据消失且回收站找不回
+node "$B" records  <token|url> <table_id>                    # 读记录
+node "$B" addrec   <token|url> <table_id> <json或csv文件>     # 新增(csv 的表头即字段名)
+node "$B" updrec   <token|url> <table_id> <record_id> <json> # 改(只传要改的字段)
+node "$B" delrec   <token|url> <table_id> <record_id...> --yes
+```
+
+- **写入前先 `fields` 看类型**:往「数字」字段写字符串会被飞书拒绝。
+- **读大表**:`records` 默认最多 200 条,续读用 `--page-token <上次返回的 next_page_token>`(bitable 是游标分页,不能按 offset 跳);全量导出用 `--out data.csv`。
+- 批量写/删超过 500 条时脚本自动分批;某批失败会报清楚「已成功几批」,**不会假装整体成功、也不会回滚**。
+- 文本字段飞书返的是富文本数组,脚本已归一化成纯字符串;多选/附件/人员等保持原结构。
+
 ### 记住目标位置
 
 确定常用目标后记进 `~/.kala/feishu/<account>.targets.json` 复用(下次直接读):
@@ -175,4 +227,7 @@ node "$SKILL_DIR/scripts/feishu-scope-audit.mjs" --no-write  # 只做只读探�
 
 - 权限/能力类报错(`99991672`/`99991679`)→ 后台 scope 没配全 / 没发布审核 / OAuth 没授权到,回 `references/setup-guide.md` 步骤 2、5 核对。
 - `99991663` token 过期 → `feishu-oauth.mjs refresh`;refresh 也过期 → `auth` 重新授权。
+- **`网络中断: ...`** → 网络层瞬时失败(不是飞书拒绝)。脚本对**幂等**请求(读、写固定值、删除)已自动重试 2 次;
+  报错说「**可能已生效**,请先核对」的是**非幂等**请求(建表格/加工作表/追加行/新增记录)——
+  这类请求可能已经在飞书执行了、只是响应没回来。**不要直接重跑**,先读一遍看数据在不在,再决定补不补,否则会写两份。
 - 更多错误码与 API 明细见 `references/api-cheatsheet.md`。

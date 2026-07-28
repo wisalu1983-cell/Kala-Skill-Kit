@@ -50,12 +50,13 @@ function tokenFor(acct) {
   } catch { return ''; }
 }
 
-// 该账号能否访问这个 wiki 节点 / docx 文档?(只读探测)
-async function canAccess(acct, { wikiToken, docToken }) {
+// 该账号能否访问这个 wiki 节点 / docx 文档 / 电子表格 / 多维表格?(只读探测)
+async function canAccess(acct, { wikiToken, docToken, sheetToken, baseToken }) {
   const t = tokenFor(acct);
   if (!t) return false;
-  const path = wikiToken
-    ? `/wiki/v2/spaces/get_node?token=${encodeURIComponent(wikiToken)}`
+  const path = wikiToken ? `/wiki/v2/spaces/get_node?token=${encodeURIComponent(wikiToken)}`
+    : sheetToken ? `/sheets/v3/spreadsheets/${sheetToken}`
+    : baseToken ? `/bitable/v1/apps/${baseToken}`
     : `/docx/v1/documents/${docToken}`;
   try {
     const r = await fetch(`${FEISHU_BASE}${path}`, { headers: { Authorization: `Bearer ${t}` } });
@@ -66,10 +67,10 @@ async function canAccess(acct, { wikiToken, docToken }) {
 
 /**
  * 选账号并写入 process.env.KALA_FEISHU_ACCOUNT。返回 { account, source }。
- * @param {object} o  { url?, wikiToken?, docToken?, quiet? }
+ * @param {object} o  { url?, wikiToken?, docToken?, sheetToken?, baseToken?, quiet? }
  */
 export async function autoSelectAccount(o = {}) {
-  const { url, wikiToken, docToken, quiet } = o;
+  const { url, wikiToken, docToken, sheetToken, baseToken, quiet } = o;
   const note = (a, src) => { if (!quiet && src !== 'env') process.stderr.write(`· 自动账号: ${a} (${src})\n`); };
 
   const explicit = process.env.KALA_FEISHU_ACCOUNT;
@@ -89,9 +90,9 @@ export async function autoSelectAccount(o = {}) {
     note(routing[domain], 'routing'); return { account: routing[domain], source: 'routing' };
   }
 
-  if (wikiToken || docToken) {
+  if (wikiToken || docToken || sheetToken || baseToken) {
     for (const acct of accts) {
-      if (await canAccess(acct, { wikiToken, docToken })) {
+      if (await canAccess(acct, { wikiToken, docToken, sheetToken, baseToken })) {
         if (domain) { routing[domain] = acct; saveRouting(routing); }
         process.env.KALA_FEISHU_ACCOUNT = acct;
         note(acct, 'probe'); return { account: acct, source: 'probe' };

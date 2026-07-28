@@ -49,26 +49,80 @@ export async function tenantToken() {
   return _tenantToken;
 }
 
+// ── 网络瞬时失败的重试 ───────────────────────────────────────────
+//
+// 只重试**网络层**错误(连接被重置/超时/DNS 抖动)。飞书返回的业务错误码
+// (权限不足、参数错、找不到对象)重试多少次都是同样结果,直接抛。
+
+const RETRY_ATTEMPTS = 2;   // 首次之外再试 2 次
+const RETRY_BASE_MS = 400;  // 退避:第 1 次等 400ms,第 2 次 800ms
+
+const TRANSIENT_CODES = new Set([
+  'ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN', 'EPIPE', 'ENOTFOUND',
+  'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET', 'UND_ERR_HEADERS_TIMEOUT',
+]);
+
+function isTransientNetworkError(e) {
+  if (!e) return false;
+  if (TRANSIENT_CODES.has(e.cause?.code) || TRANSIENT_CODES.has(e.code)) return true;
+  return /fetch failed|socket hang up|network|timeout/i.test(e.message || '');
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/**
+ * 这个请求重复执行一遍,结果是否相同?
+ *   GET    读,天然幂等
+ *   PUT    写固定值到固定位置,写两遍结果一样
+ *   DELETE 删两遍等于删一遍
+ *   POST   默认**不**幂等 —— 建表格/追加行/新增记录重试就会多出一份。
+ *          只读的 POST(如多维表格的 records/search)由调用方显式 retryable: true。
+ */
+function defaultRetryable(method) {
+  return method === 'GET' || method === 'PUT' || method === 'DELETE';
+}
+
 /**
  * 带鉴权的请求。默认用 user token。
  * @param {string} method  GET/POST/DELETE/PATCH/PUT
  * @param {string} path    以 / 开头,拼在 FEISHU_BASE 之后
- * @param {object} opts    { query, body, token }
+ * @param {object} opts    { query, body, token, retryable }
+ *                         retryable 显式声明本请求重复执行是否安全(不传按 method 推断)
  * @returns 飞书响应的 data 字段
  */
 export async function api(method, path, opts = {}) {
   const { query, body } = opts;
   const token = opts.token || userToken();
+  const retryable = opts.retryable ?? defaultRetryable(method);
   const qs = query && Object.keys(query).length ? '?' + new URLSearchParams(query).toString() : '';
   const init = { method, headers: { Authorization: `Bearer ${token}` } };
   if (body !== undefined) {
     init.headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
   }
-  const r = await fetch(`${FEISHU_BASE}${path}${qs}`, init);
-  const d = await r.json();
-  if (d.code !== 0) throw new Error(`Feishu ${d.code}: ${d.msg} [${method} ${path}]`);
-  return d.data;
+
+  const maxAttempts = retryable ? RETRY_ATTEMPTS + 1 : 1;
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (attempt > 1) await sleep(RETRY_BASE_MS * (attempt - 1));
+    try {
+      const r = await fetch(`${FEISHU_BASE}${path}${qs}`, init);
+      const d = await r.json();
+      if (d.code !== 0) throw new Error(`Feishu ${d.code}: ${d.msg} [${method} ${path}]`);
+      return d.data;
+    } catch (e) {
+      if (!isTransientNetworkError(e)) throw e; // 业务错误:重试无意义
+      lastErr = e;
+      if (!retryable) {
+        // 关键:网络中断可能发生在「飞书已执行、响应回程断了」,盲目重发会写两遍。
+        throw new Error(
+          `网络中断: ${e.message} [${method} ${path}] —— 这是非幂等请求,**可能已生效**,` +
+          '故不自动重试。请先核对现状(读一次看数据在不在)再决定是否重发。'
+        );
+      }
+    }
+  }
+  throw new Error(`网络中断: ${lastErr.message} [${method} ${path}] —— 已重试 ${RETRY_ATTEMPTS} 次仍失败。`);
 }
 
 /** multipart/form-data 上传(飞书上传接口用)。fields: [[name, value, {filename, contentType}?], ...] */
