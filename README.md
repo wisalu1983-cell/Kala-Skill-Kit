@@ -9,11 +9,11 @@
 |---|---|
 | **kala-handoff** | 为长 session 写结构化交接文档,让不同设备/不同 agent 无损接手。覆盖背景、当前状态、过程(含放弃的方案)、关键决策、用户反馈原话、下一步。 |
 | **kala-resume** | 换设备/换 agent 后,从项目 `.handoff/` 恢复上一段工作:git pull → 按话题链列出 → 复述理解 → 等确认再动手。 |
-| **kala-feishu** | 用你本人的飞书身份(OAuth)读写/管理飞书云文档与知识库(创建·写 Markdown 含表格图片·云盘目录·知识库节点·全文评论)。多账号按租户自动选。含从零部署引导 + 自动化冒烟测试。纯 Node 脚本,零 npm 依赖。 |
+| **kala-feishu** | 用你本人的飞书身份(OAuth)读写/管理飞书云文档、知识库与两类表格(创建·写 Markdown 含表格图片·云盘目录·知识库节点·全文评论·电子表格单元格/工作表/行列·多维表格记录/字段)。多账号按租户自动选。含从零部署引导 + 自动化冒烟测试。纯 Node 脚本,零 npm 依赖。 |
 
 > 用 `kala-` 前缀是为了和其它来源的同名 skill(如项目 `.agents/skills/` 里的 `handoff`)区分开——同名 skill 在 Codex 等工具的选择器里不会合并、会各列一条。
 
-> **kala-feishu 说明**:它带 `scripts/`(纯 Node,零 npm 依赖)+ `references/`。skill 定义随 git 走;**运行期数据(App 凭证 / OAuth token / 目标位置)落在仓库外的 `~/.kala/feishu/`,不进 git**。每台设备首次用需部署一次(写凭证 + 浏览器授权一次),skill 的 SKILL.md 会引导。Cursor 因不装脚本目录被跳过,请在 Claude Code / Codex / OpenClaw 里用。
+> **kala-feishu 说明**:它带 `scripts/`(纯 Node,零 npm 依赖)+ `references/`。skill 定义随 git 走;**运行期数据(App 凭证 / OAuth token / 目标位置)落在仓库外的 `~/.kala/feishu/`,不进 git**。每台设备首次用需部署一次(写凭证 + 浏览器授权一次),skill 的 SKILL.md 会引导。Claude Code / Codex / Cursor 三端都可用(OpenClaw 自带飞书工具,明确跳过)。
 
 ## 安装
 
@@ -31,7 +31,7 @@ cd ~/MyProjects/Kala-Skill-Kit
 - **Claude Code**(`${CLAUDE_CONFIG_DIR:-~/.claude}`)→ 该目录下的 `skills/`。注意:Compass/企业版会用 `CLAUDE_CONFIG_DIR` 把配置目录改到别处(如 `~/.claude-compass`),installer 会自动认这个环境变量,装到它读的地方,而不是默认的 `~/.claude`。
 - **Codex**(`~/.codex`)→ `$CODEX_HOME/skills`(默认 `~/.codex/skills`,Codex 自带的 skill-installer/skill-creator 即从这里自动发现 skill)
 - **OpenClaw**(`~/.openclaw`)→ `~/.openclaw/skills/`
-- **Cursor**(`~/.cursor`)→ 生成自包含的 `commands/kala-handoff.md`、`kala-resume.md`(内容同源)
+- **Cursor**(`~/.cursor`)→ 双轨:**带 `scripts/` 的 skill**(如 kala-feishu)装到 `~/.cursor/skills/<名>/`,并按该目录的约定登记 `_manifest.json`、调它自带的 `scripts/generate-index.ps1` 刷新 `_index.md`(没有这套管理文件的机器就只是普通目录);**纯文档的 skill** 生成自包含的 `commands/kala-handoff.md`、`kala-resume.md`(内容同源,供 `/` 斜杠命令调用)
 - 某工具本机没装 → 跳过并在小结里标出。装好后重跑脚本增量补齐,幂等。
 
 改完任何 skill,重跑 `./install.sh` 覆盖更新;跨设备就 `git pull` 后再跑。

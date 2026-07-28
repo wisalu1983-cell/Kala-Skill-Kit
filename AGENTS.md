@@ -25,6 +25,7 @@
 - **kala-feishu 不装到 OpenClaw**:OpenClaw 自带 `feishu_doc/drive/wiki/perm` 工具,重复且会造成触发歧义。
   install.sh 已对 OpenClaw 自动跳过 kala-feishu——**不要绕过这个跳过手动塞进 OpenClaw**。
 - **install.sh 是覆盖式**:每个 skill 先 `rm -rf` 再 `cp`,会冲掉已装副本里的手改。装前务必 `--dry-run` 看清"新建 / 覆盖 / 跳过"。
+- **Cursor 是双轨的**:安装器按「该 skill 有没有 `scripts/` 目录」自动分流——带脚本的装进 `~/.cursor/skills/<名>/`(并登记 `_manifest.json` + 触发该目录自带的 `generate-index.ps1` 刷新 `_index.md`),纯文档的转成 `~/.cursor/commands/<名>.md`。**判断依据是目录里有没有 `scripts/`,不是硬编码 skill 名**,加新 skill 无需改这段逻辑。
 - **装完要重启对应 CLI**:skill 在 CLI 启动时注册,重装后不重启看不到。
 - **加新 skill**:在 `skills/<名>/SKILL.md` 建好,并把名字加进 `install.sh` 的 `SKILLS=(...)` 数组——**不是自动发现目录**。
 

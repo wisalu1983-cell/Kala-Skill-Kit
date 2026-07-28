@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, rmSync, cpSync, readFileSync, writeFileSync } fr
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
+import { execFileSync } from 'child_process';
 
 const KIT_DIR = dirname(fileURLToPath(import.meta.url));
 const SRC = join(KIT_DIR, 'skills');
@@ -115,36 +116,112 @@ function installAsSkills(label, base, skip = []) {
   if (!any) summary.push('      (本次没有要装到这里的 skill)');
 }
 
-// Cursor 不吃 SKILL 目录:只把 handoff/resume 转成自包含 command md(feishu 带脚本,跳过)
+/** 这个 skill 带可执行脚本吗?带脚本的必须装成真正的 skill 目录,转不成单文件 command。 */
+function hasScripts(s) { return existsSync(join(SRC, s, 'scripts')); }
+
+/** 从 SKILL.md 的 frontmatter 里取 description(登记进 Cursor 的 _manifest.json 用)。 */
+function readDescription(s) {
+  const lines = readFileSync(join(SRC, s, 'SKILL.md'), 'utf8').split(/\r?\n/);
+  if (lines[0]?.trim() !== '---') return '';
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '---') break;
+    const m = lines[i].match(/^description:\s*(.*)$/);
+    if (m) return m[1].trim();
+  }
+  return '';
+}
+
+/**
+ * Cursor 的 skills 根目录若带 `_manifest.json`(用户自建的目录管理体系),把新装的 skill 登记进去。
+ * 别的机器没有这套东西就跳过 —— 那边它只是个普通目录。
+ */
+function updateCursorManifest(skillsRoot, names) {
+  const mf = join(skillsRoot, '_manifest.json');
+  if (!existsSync(mf)) return null;
+  const raw = readFileSync(mf, 'utf8');
+  const bom = raw.startsWith('﻿') ? '﻿' : '';
+  let j;
+  try { j = JSON.parse(raw.replace(/^﻿/, '')); } catch { return '（_manifest.json 解析失败,跳过登记）'; }
+  j.skills ||= {};
+  const today = new Date().toISOString().slice(0, 10);
+  const added = [];
+  for (const s of names) {
+    const prev = j.skills[s];
+    j.skills[s] = {
+      source: 'local',
+      update_policy: 'manual',
+      created: prev?.created || today,
+      description: readDescription(s),
+    };
+    added.push(prev ? `${s}(更新)` : `${s}(新登记)`);
+  }
+  if (!dryRun) writeFileSync(mf, bom + JSON.stringify(j, null, 4), 'utf8');
+  return added.join('、');
+}
+
+/** 索引由该目录自带的 generate-index.ps1 生成(_index.md 头部写明「请勿手动编辑」),这里只负责触发它。 */
+function regenerateCursorIndex(skillsRoot) {
+  const ps = join(skillsRoot, 'scripts', 'generate-index.ps1');
+  if (!existsSync(ps)) return null;
+  if (dryRun) return '将重新生成 _index.md';
+  for (const exe of ['pwsh', 'powershell']) {
+    try {
+      execFileSync(exe, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps], { stdio: 'ignore' });
+      return `已用 ${exe} 重新生成 _index.md`;
+    } catch { /* 换下一个 */ }
+  }
+  return '⚠️ 没跑成 generate-index.ps1,请手动执行一次以刷新 _index.md';
+}
+
+/**
+ * Cursor 双轨:
+ *   带 scripts/ 的 skill → ~/.cursor/skills/<名>/(flat layout,按该目录的 _manifest/_index 约定登记)
+ *   纯文档的 skill       → ~/.cursor/commands/<名>.md(自包含,供 / 斜杠命令主动调用)
+ */
 function installAsCursor(base) {
-  const dest = join(base, 'commands');
-  summary.push(`  Cursor  →  ${dest}`);
+  const cmdDest = join(base, 'commands');
+  const skillDest = join(base, 'skills');
+  const withScripts = EFF_SKILLS.filter(hasScripts);
+  const docOnly = EFF_SKILLS.filter(s => !hasScripts(s));
   let did = false;
-  for (const s of EFF_SKILLS) {
-    if (s === 'kala-handoff') {
+
+  if (withScripts.length) {
+    summary.push(`  Cursor(skills)  →  ${skillDest}`);
+    for (const s of withScripts) {
       did = true;
-      const f = join(dest, 'kala-handoff.md');
-      summary.push(`      - kala-handoff.md : ${existsSync(f) ? '覆盖' : '新建'}`);
+      const target = join(skillDest, s);
+      summary.push(`      - ${s}/ : ${existsSync(target) ? '覆盖(已存在)' : '新建'}(带脚本)`);
       if (!dryRun) {
-        mkdirSync(dest, { recursive: true });
-        const body = stripFm(join(SRC, 'kala-handoff', 'SKILL.md'))
-          + '\n\n---\n# 附:交接文档模板(上文步骤 4/5 引用的 TEMPLATE)\n\n'
-          + readFileSync(join(SRC, 'kala-handoff', 'TEMPLATE.md'), 'utf8');
-        writeFileSync(f, body, 'utf8');
+        mkdirSync(skillDest, { recursive: true });
+        rmSync(target, { recursive: true, force: true });
+        cpSync(join(SRC, s), target, { recursive: true });
       }
-    } else if (s === 'kala-resume') {
+    }
+    const mf = updateCursorManifest(skillDest, withScripts);
+    if (mf) summary.push(`      · _manifest.json: ${mf}`);
+    const idx = regenerateCursorIndex(skillDest);
+    if (idx) summary.push(`      · ${idx}`);
+  }
+
+  if (docOnly.length) {
+    summary.push(`  Cursor(commands)  →  ${cmdDest}`);
+    for (const s of docOnly) {
       did = true;
-      const f = join(dest, 'kala-resume.md');
-      summary.push(`      - kala-resume.md : ${existsSync(f) ? '覆盖' : '新建'}`);
-      if (!dryRun) {
-        mkdirSync(dest, { recursive: true });
-        writeFileSync(f, stripFm(join(SRC, 'kala-resume', 'SKILL.md')), 'utf8');
+      const f = join(cmdDest, `${s}.md`);
+      summary.push(`      - ${s}.md : ${existsSync(f) ? '覆盖' : '新建'}`);
+      if (dryRun) continue;
+      mkdirSync(cmdDest, { recursive: true });
+      let body = stripFm(join(SRC, s, 'SKILL.md'));
+      // handoff 的模板是正文引用的,command 是单文件,必须内联进来
+      const tpl = join(SRC, s, 'TEMPLATE.md');
+      if (existsSync(tpl)) {
+        body += '\n\n---\n# 附:交接文档模板(上文步骤 4/5 引用的 TEMPLATE)\n\n' + readFileSync(tpl, 'utf8');
       }
-    } else {
-      summary.push(`      - ${s} : 跳过(Cursor 不装带脚本的 skill)`);
+      writeFileSync(f, body, 'utf8');
     }
   }
-  if (!did) summary.push('      (本次没有可装到 Cursor 的 skill)');
+
+  if (!did) summary.push('  Cursor  →  (本次没有可装到 Cursor 的 skill)');
 }
 
 // ── 逐工具探测 + 安装 ─────────────────────────────────────────────────────────
