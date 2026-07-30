@@ -26,7 +26,24 @@
       "domain": "mcnoxqwo573j.feishu.cn",
       "app_id": "cli_a9454ea5f238dcd3",
       "app_name": "Klaw",
-      "note": "即老 Windows openclaw「小埋」用过的 bot 所在应用。该租户下另有一个 2026-07 前建的旧应用 cli_a90443b1d4b85cb1(老 lark-mcp 方案用),已废弃、本机零引用,应在开发者后台删除;若后台还能看到它,不要再用"
+      "note": "即老 Windows openclaw「小埋」用过的 bot 所在应用。该租户下另有一个 2026-07 前建的旧应用 cli_a90443b1d4b85cb1(老 lark-mcp 方案用),已于 2026-07-30 完成退役(见 _retired 段),**待用户在开发者后台删除该应用**;若后台还能看到它,不要再用"
+    }
+  },
+  "_retired": {
+    "lark-mcp / FeiShuDoc": {
+      "retired_on": "2026-07-30",
+      "app_id": "cli_a90443b1d4b85cb1",
+      "tenant": "休闲游戏租户(mcnoxqwo573j),与 casualgame 同租户但是另一个应用",
+      "what_it_was": "本地自建的飞书 MCP 服务(E:/Cursor/MCP/FeiShuDoc),注册在 Cursor 的 ~/.cursor/mcp.json 与 Codex 的 ~/.codex/config.toml,服务名 lark-mcp;配套 skill 为 export-feishu-doc-to-local(硬依赖 user-lark-mcp 前缀的工具)",
+      "removed": [
+        "E:/Cursor/MCP/FeiShuDoc/ 整个目录(含 App Secret 与 user token 文件)",
+        "~/.cursor/mcp.json 的 lark-mcp 块",
+        "~/.codex/config.toml 的 [mcp_servers.lark-mcp] 两节",
+        "E:/Cursor/MCP/setup.ps1 的 Feishu 段(并改为主动 Remove(\"lark-mcp\"),清理旧设备残留)",
+        "export-feishu-doc-to-local:~/.claude/skills、~/.agents/skills、~/.cursor/skills、E:/Cursor/MCP/skills 四处 + 三处 _manifest.json 条目"
+      ],
+      "capability_gap": "export-feishu-doc-to-local 提供的「飞书文档→本地 Markdown 且自动下载内嵌图片到 images/」kala-feishu 目前没有对应实现。表格侧无缺口(sheets/bitable 的 --out 可导 CSV)。若日后需要,应在 kala-feishu 里新增导出脚本,而不是复活 lark-mcp。",
+      "todo_by_user": "在 https://open.feishu.cn/app 删除应用 cli_a90443b1d4b85cb1 —— 这一步才真正吊销 secret(旧凭证文件仍在私有仓库 wisalu1983-cell/MyMCP 的历史 commit 4f8c61d 里)"
     }
   }
 }
