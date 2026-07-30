@@ -90,26 +90,40 @@ node "$env:USERPROFILE\.claude\skills\kala-feishu\scripts\selftest.mjs"
 
 macOS 用 launchd,Windows 用**任务计划程序**跑同一个 `keepalive.mjs`(它会遍历所有账号)。
 
-**推荐:脚本自动注册**(内部用 `schtasks /Create`,每周一 09:00,注册后立即跑一次):
+**推荐:脚本自动注册**(每周一 09:00,注册后立即跑一次):
 
 ```powershell
 node "$env:USERPROFILE\.claude\skills\kala-feishu\scripts\setup-keepalive.mjs"
 node "$env:USERPROFILE\.claude\skills\kala-feishu\scripts\setup-keepalive.mjs" --status
 ```
 
-若脚本注册失败,再用下面的手动 PowerShell 方式(等价):
+> **注册出来的任务带 `StartWhenAvailable`(错过则唤醒后补跑),这是最关键的一项,别去掉。**
+> 机器休眠/关机时到点,这次刷新就错过了;没有补跑它会被**永久跳过**,常年休眠的机器
+> 因此攒不够刷新次数、token 照样过期(实测某台机器约 23% 概率)。
+> `schtasks` 的命令行参数**表达不了**这个开关,所以脚本改走 `/Create /XML` 导入任务定义。
+> 有了补跑之后,挑哪个时刻跑就不重要了 —— 最大间隔上界 = 周期 + 该机最长连续休眠时长。
+
+若脚本注册失败,再用下面的手动 PowerShell 方式(等价,**注意 `-Settings` 那段不能省**):
 
 ```powershell
 $node   = (Get-Command node).Source
-$script = "$env:USERPROFILE\MyProjects\Kala-Skill-Kit\skills\kala-feishu\scripts\keepalive.mjs"
+$script = "$env:USERPROFILE\.claude\skills\kala-feishu\scripts\keepalive.mjs"
 $log    = "$env:USERPROFILE\.kala\feishu\keepalive.log"
 
 $action  = New-ScheduledTaskAction -Execute "cmd.exe" `
            -Argument "/c `"`"$node`" `"$script`" >> `"$log`" 2>&1`""
 $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Monday -At 9am
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable `
+              -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+              -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
+$settings.MultipleInstances = 'IgnoreNew'   # 该参数在 New-ScheduledTaskSettingsSet 上不存在,只能对象赋值
 Register-ScheduledTask -TaskName "KalaFeishuTokenRefresh" -Action $action -Trigger $trigger `
-  -Description "kala-feishu 多账号 OAuth token 保活" -Force
+  -Settings $settings -Description "kala-feishu 多账号 OAuth token 保活" -Force
 ```
+
+**想换成更贴合自己作息的时刻**:直接在任务计划程序里改触发器,或用
+`Set-ScheduledTask -TaskName KalaFeishuTokenRefresh -Trigger (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Thursday -At '23:00')`。
+补跑设置不受影响。注意 **重跑 `setup-keepalive.mjs` 会用 `/F` 覆盖掉你改过的触发器**,改完记得重设。
 
 立即跑一次验证:
 ```powershell

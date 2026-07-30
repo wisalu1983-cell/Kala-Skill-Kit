@@ -8,6 +8,14 @@
  *   - Windows → 任务计划程序(schtasks,任务名 KalaFeishuTokenRefresh,每周一 09:00,注册后立即跑一次)
  *   - Linux   → 不自动写 crontab,打印建议的 cron 行
  *
+ * 「错过要补跑」是本脚本的关键设定,别去掉:
+ * 机器休眠/关机时到点,这次刷新就错过了。没有补跑的话它会被永久跳过——常年休眠的机器
+ * 因此攒不够刷新次数,refresh_token 照样过期(实测某台机器有约 23% 概率过期)。
+ *   - Windows → 任务 XML 里的 <StartWhenAvailable>true</StartWhenAvailable>;
+ *               schtasks 命令行**表达不了**这个开关,所以走 /XML 导入而不是 /SC WEEKLY。
+ *   - macOS   → launchd 的 StartInterval 本身就会在唤醒后补跑错过的那次,无需额外设置。
+ * 有了补跑之后,具体挑哪个时刻跑就不重要了(最大间隔上界 = 周期 + 最长连续休眠)。
+ *
  * 用法:
  *   node setup-keepalive.mjs              # 注册(重复运行 = 用当前 node/脚本路径重写,幂等)
  *   node setup-keepalive.mjs --status     # 看注册状态
@@ -18,7 +26,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -105,16 +113,66 @@ if (process.platform === 'win32') {
   mkdirSync(dirname(LOG), { recursive: true });
   // cmd /c ""node" "script" >> "log" 2>&1" —— 外层引号会被 cmd 剥掉,内层保住带空格路径
   const tr = `cmd /c ""${NODE}" "${KEEPALIVE}" >> "${LOG}" 2>&1"`;
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  // StartBoundary 只定义「几点」,日期取今天即可(周触发器按 DaysOfWeek 循环)
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // <Settings> 里的元素顺序由 Task Scheduler 的 schema 固定,顺序错了导入会被拒。
+  // 下面的顺序抄自 Windows 自己 `schtasks /Query /XML` 的输出,别重排。
+  const xml = `<?xml version="1.0" encoding="UTF-16"?>
+<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>kala-feishu 多账号 OAuth token 保活(每周一次,错过则唤醒后补跑)</Description>
+  </RegistrationInfo>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <ExecutionTimeLimit>PT10M</ExecutionTimeLimit>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <StartWhenAvailable>true</StartWhenAvailable>
+  </Settings>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>${today}T09:00:00</StartBoundary>
+      <ScheduleByWeek>
+        <WeeksInterval>1</WeeksInterval>
+        <DaysOfWeek>
+          <Monday />
+        </DaysOfWeek>
+      </ScheduleByWeek>
+    </CalendarTrigger>
+  </Triggers>
+  <Actions Context="Author">
+    <Exec>
+      <Command>cmd</Command>
+      <Arguments>${esc(tr.replace(/^cmd /, ''))}</Arguments>
+    </Exec>
+  </Actions>
+</Task>
+`;
+  // schtasks /XML 要求 Unicode 文件,写 UTF-16LE + BOM
+  const BOM = '\u{fEFF}';
+  const xmlPath = join(tmpdir(), `kala-feishu-task-${process.pid}.xml`);
+  writeFileSync(xmlPath, Buffer.from(BOM + xml, 'utf16le'));
   try {
-    run('schtasks.exe', ['/Create', '/TN', WIN_TASK, '/SC', 'WEEKLY', '/D', 'MON',
-      '/ST', '09:00', '/F', '/TR', tr]);
+    run('schtasks.exe', ['/Create', '/TN', WIN_TASK, '/XML', xmlPath, '/F']);
     tryRun('schtasks.exe', ['/Run', '/TN', WIN_TASK]); // 立即跑一次当验证
-    console.log(`✅ 已注册计划任务 ${WIN_TASK}(每周一 09:00),并已触发一次`);
+    console.log(`✅ 已注册计划任务 ${WIN_TASK}(每周一 09:00,错过则唤醒后补跑),并已触发一次`);
     console.log(`   验证:Get-Content "${LOG}" -Tail 5`);
+    console.log(`   想换时刻:任务计划程序里改触发器即可,补跑设置不受影响。`);
   } catch (e) {
     console.error(`❌ schtasks 注册失败: ${(e.stderr || e.message || '').toString().trim()}`);
     console.error('请改用手动方式(references/windows-setup.md 步骤 6 的 PowerShell 命令)。');
     process.exit(1);
+  } finally {
+    rmSync(xmlPath, { force: true });
   }
   process.exit(0);
 }
