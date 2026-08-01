@@ -22,7 +22,7 @@ import { execFileSync } from 'child_process';
 
 const KIT_DIR = dirname(fileURLToPath(import.meta.url));
 const SRC = join(KIT_DIR, 'skills');
-const SKILLS = ['kala-handoff', 'kala-resume', 'kala-feishu'];
+const SKILLS = ['kala-handoff', 'kala-resume', 'kala-feishu', 'kala-gog'];
 const TOOLS_ALL = ['claude', 'codex', 'cursor', 'openclaw'];
 const HOME = homedir();
 
@@ -77,7 +77,7 @@ const wantTool = (t) => !reqTools || reqTools.split(',').includes(t);
 if (doList) {
   console.log(`可选 skill:  ${SKILLS.join(' ')}`);
   console.log(`可选工具:    ${TOOLS_ALL.join(' ')}`);
-  console.log('默认行为:    不带参数 = 全部 skill → 所有探测到的工具(kala-feishu 不装到 OpenClaw)');
+  console.log('默认行为:    不带参数 = 全部 skill → 所有探测到的工具(kala-feishu / kala-gog 不装到 OpenClaw)');
   process.exit(0);
 }
 
@@ -94,15 +94,16 @@ function stripFm(file) {
 
 const summary = [];
 
-function installAsSkills(label, base, skip = []) {
+/** skip: { <skill 名>: '跳过原因' } —— 命中的 skill 不装,并清掉该位置的历史遗留副本。 */
+function installAsSkills(label, base, skip = {}) {
   const dest = join(base, 'skills');
   summary.push(`  ${label}  →  ${dest}`);
   let any = false;
   for (const s of EFF_SKILLS) {
     any = true;
     const target = join(dest, s);
-    if (skip.includes(s)) {
-      summary.push(`      - ${s} : 跳过(OpenClaw 自带飞书工具)`);
+    if (skip[s]) {
+      summary.push(`      - ${s} : 跳过(${skip[s]})`);
       if (!dryRun) rmSync(target, { recursive: true, force: true }); // 清掉历史遗留
       continue;
     }
@@ -243,10 +244,14 @@ if (wantTool('cursor')) {
   else summary.push('–  Cursor 未发现 ~/.cursor,跳过');
 }
 
-// OpenClaw 自带飞书工具(feishu_doc/drive/wiki/perm),kala-feishu 对它冗余且会造成触发歧义,故明确跳过
+// OpenClaw 侧已有同源能力的 skill,重复安装会造成触发歧义,故明确跳过(见 AGENTS.md 硬规则)
+const OPENCLAW_SKIP = {
+  'kala-feishu': 'OpenClaw 自带飞书工具 feishu_doc/drive/wiki/perm',
+  'kala-gog': 'OpenClaw 已有同源的 gog skill',
+};
 if (wantTool('openclaw')) {
   const oc = [join(HOME, '.openclaw'), join(HOME, '.config', 'openclaw'), join(HOME, '.open-claw')].find(existsSync);
-  if (oc) installAsSkills('OpenClaw', oc, ['kala-feishu']);
+  if (oc) installAsSkills('OpenClaw', oc, OPENCLAW_SKIP);
   else summary.push('–  OpenClaw 未发现其配置目录,跳过(装好后重跑本脚本)');
 }
 

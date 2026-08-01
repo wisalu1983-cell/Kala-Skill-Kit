@@ -10,10 +10,13 @@
 | **kala-handoff** | 为长 session 写结构化交接文档,让不同设备/不同 agent 无损接手。覆盖背景、当前状态、过程(含放弃的方案)、关键决策、用户反馈原话、下一步。 |
 | **kala-resume** | 换设备/换 agent 后,从项目 `.handoff/` 恢复上一段工作:git pull → 按话题链列出 → 复述理解 → 等确认再动手。 |
 | **kala-feishu** | 用你本人的飞书身份(OAuth)读写/管理飞书云文档、知识库与两类表格(创建·写 Markdown 含表格图片·云盘目录·知识库节点·全文评论·电子表格单元格/工作表/行列·多维表格记录/字段)。多账号按租户自动选。含从零部署引导 + 自动化冒烟测试。纯 Node 脚本,零 npm 依赖。 |
+| **kala-gog** | 用你本人的 Google 身份(OAuth)读写 Gmail / 日历 / Drive / Docs / Sheets / Contacts,覆盖个人号与 Garena 工作号两个账号。底层是本地 `gog` CLI。含从零部署引导(装 CLI → 配 OAuth 客户端 → 逐账号授权 → 冒烟)与 Windows 指南。 |
 
 > 用 `kala-` 前缀是为了和其它来源的同名 skill(如项目 `.agents/skills/` 里的 `handoff`)区分开——同名 skill 在 Codex 等工具的选择器里不会合并、会各列一条。
 
 > **kala-feishu 说明**:它带 `scripts/`(纯 Node,零 npm 依赖)+ `references/`。skill 定义随 git 走;**运行期数据(App 凭证 / OAuth token / 目标位置)落在仓库外的 `~/.kala/feishu/`,不进 git**。每台设备首次用需部署一次(写凭证 + 浏览器授权一次),skill 的 SKILL.md 会引导。Claude Code / Codex / Cursor 三端都可用(OpenClaw 自带飞书工具,明确跳过)。
+
+> **kala-gog 说明**:它是**纯文档 skill**(无 `scripts/`),能力来自宿主机上的 [gogcli](https://github.com/openclaw/gogcli)——二进制命令名是 **`gog`**,不是 `gogcli`。所以"部署"= 装 CLI + 配 OAuth 客户端 + 逐账号授权,**凭证与 token 存进系统密钥链(macOS Keychain / Windows 凭据管理器),不进 git、不跨设备迁移**,换机重新授权一遍即可。账号名册见 [accounts.json](skills/kala-gog/references/accounts.json)。Claude Code / Codex / Cursor 三端可用(OpenClaw 侧已有同源的 `gog` skill,明确跳过)。
 
 ## 安装
 
@@ -25,13 +28,14 @@ cd ~/MyProjects/Kala-Skill-Kit
 ```
 
 > 安装逻辑在跨平台的 `install.mjs`(纯 Node,三平台同一份);`install.sh` 只是 macOS/Linux 的薄封装,参数一致。
-> Windows 上部署 kala-feishu 见 [skills/kala-feishu/references/windows-setup.md](skills/kala-feishu/references/windows-setup.md)。
+> Windows 上部署 kala-feishu 见 [skills/kala-feishu/references/windows-setup.md](skills/kala-feishu/references/windows-setup.md);
+> kala-gog 见 [skills/kala-gog/references/windows-setup.md](skills/kala-gog/references/windows-setup.md)。
 
 `install.sh` 会:
 - **Claude Code**(`${CLAUDE_CONFIG_DIR:-~/.claude}`)→ 该目录下的 `skills/`。注意:Compass/企业版会用 `CLAUDE_CONFIG_DIR` 把配置目录改到别处(如 `~/.claude-compass`),installer 会自动认这个环境变量,装到它读的地方,而不是默认的 `~/.claude`。
 - **Codex**(`~/.codex`)→ `$CODEX_HOME/skills`(默认 `~/.codex/skills`,Codex 自带的 skill-installer/skill-creator 即从这里自动发现 skill)
 - **OpenClaw**(`~/.openclaw`)→ `~/.openclaw/skills/`
-- **Cursor**(`~/.cursor`)→ 双轨:**带 `scripts/` 的 skill**(如 kala-feishu)装到 `~/.cursor/skills/<名>/`,并按该目录的约定登记 `_manifest.json`、调它自带的 `scripts/generate-index.ps1` 刷新 `_index.md`(没有这套管理文件的机器就只是普通目录);**纯文档的 skill** 生成自包含的 `commands/kala-handoff.md`、`kala-resume.md`(内容同源,供 `/` 斜杠命令调用)
+- **Cursor**(`~/.cursor`)→ 双轨:**带 `scripts/` 的 skill**(如 kala-feishu)装到 `~/.cursor/skills/<名>/`,并按该目录的约定登记 `_manifest.json`、调它自带的 `scripts/generate-index.ps1` 刷新 `_index.md`(没有这套管理文件的机器就只是普通目录);**纯文档的 skill** 生成自包含的 `commands/kala-handoff.md`、`kala-resume.md`、`kala-gog.md`(内容同源,供 `/` 斜杠命令调用)
 - 某工具本机没装 → 跳过并在小结里标出。装好后重跑脚本增量补齐,幂等。
 
 改完任何 skill,重跑 `./install.sh` 覆盖更新;跨设备就 `git pull` 后再跑。
@@ -70,4 +74,6 @@ cd ~/MyProjects/Kala-Skill-Kit
 
 ## 加新 skill
 
-在 `skills/` 下新建 `<名字>/SKILL.md`(需要就配套 `TEMPLATE.md` 等),把名字加进 `install.sh` 的 `SKILLS=(...)`,重跑脚本。
+在 `skills/` 下新建 `<名字>/SKILL.md`(需要就配套 `TEMPLATE.md`、`references/`、`scripts/` 等),
+把名字加进 **`install.mjs`** 的 `SKILLS` 数组(`install.sh` 只是薄封装,不要在它里面另写一份),重跑安装器。
+若 OpenClaw 那边已有同源能力,顺手往 `install.mjs` 的 `OPENCLAW_SKIP` 表加一条跳过原因。

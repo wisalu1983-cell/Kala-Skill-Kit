@@ -1,0 +1,95 @@
+{
+  "_readme": [
+    "账号名册:换新设备做 1:1 还原时,照这份清单逐账号「装客户端凭证 + OAuth 授权」。",
+    "一个 Google Cloud OAuth 客户端(client)可以带多个账号,但这里是一账号一客户端(个人号与工作号分属不同组织)。",
+    "client_secret 与 refresh_token 是敏感凭证,**不进 git**:secret 由用户本人从 Google Cloud 控制台重新下载客户端 JSON,",
+    "token 在每台设备各自 OAuth 授权后存进系统密钥链(macOS Keychain / Windows 凭据管理器),不迁移、不导出。",
+    "client_id 是 OAuth 公开标识(会出现在授权 URL 里),登记在此仅用于「新机下载到的 JSON 是不是同一个客户端」的核对。",
+    "domain 用于 gog 的客户端自动路由(client_domains):该域名的账号自动选对客户端。",
+    "接入新 Google 账号后:在此登记一条,再逐设备授权。",
+    "⛔ 决定(2026-08-01):坚持一账号一客户端、各归各的组织,**不要为省事把两个账号合并到一个客户端**;",
+    "两个项目也都维持 External + 正式版,不改 Make internal。理由与重新考虑的触发条件见 setup-guide.md。"
+  ],
+  "accounts": {
+    "personal": {
+      "email": "wiaslu@gmail.com",
+      "client": "default",
+      "domain": null,
+      "is_default_client": true,
+      "note": "个人 Gmail。默认客户端,不设 client_domains;「个人」「我的 Gmail」类请求走它"
+    },
+    "work": {
+      "email": "jiaren.lu@garena.com",
+      "client": "garena",
+      "domain": "garena.com",
+      "is_default_client": false,
+      "note": "Garena 工作号(Google Workspace 租户)。「工作」「公司」「Garena」类请求走它"
+    }
+  },
+  "oauth_clients": {
+    "default": {
+      "type": "Desktop app",
+      "client_id": "243575671653-eps32jilhq4oh3443sf10qp3pmcffhpu.apps.googleusercontent.com",
+      "gcp_project_number": "243575671653",
+      "gcp_project_id": "apt-summer-487208-p3",
+      "gcp_project_name": "Google Drive MCP",
+      "oauth_client_name": "Google Drive MCP Client",
+      "oauth_client_created": "2026-02-12",
+      "credentials_filename_on_mac": "credentials.json",
+      "console_url": "https://console.cloud.google.com/apis/credentials?project=apt-summer-487208-p3",
+      "consent_screen": {
+        "user_type": "外部 / External",
+        "publishing_status": "正式版 / In production",
+        "verified": false,
+        "user_count": "2 / 100(未验证应用的终生用户上限)",
+        "checked_on": "2026-08-01",
+        "ok": true
+      },
+      "install_cmd": "gog --client default auth credentials <下载到的客户端JSON路径>",
+      "note": "客户端建于 2026-02-12,早于 gog(2026-07-19)——它原本是给 Google Drive MCP 用的,gog 复用了同一个客户端。换机时别去新建「gog 专用」客户端,直接复用这个;项目名/客户端名带 MCP 字样属正常,不是配错了"
+    },
+    "garena": {
+      "type": "Desktop app",
+      "client_id": "614761878984-qml0h39stp0tlte2r7prshejqbt6kil5.apps.googleusercontent.com",
+      "gcp_project_number": "614761878984",
+      "gcp_project_id": "garena-doc-reader-mcp",
+      "gcp_project_name": "Garena Doc Reader MCP",
+      "oauth_client_name": "Garena Doc Reader MCP",
+      "oauth_client_created": "2026-03-16",
+      "credentials_filename_on_mac": "credentials-garena.json",
+      "console_url": "https://console.cloud.google.com/apis/credentials?project=garena-doc-reader-mcp",
+      "consent_screen": {
+        "user_type": "外部 / External",
+        "publishing_status": "正式版 / In production",
+        "verified": false,
+        "user_count": "1 / 100(未验证应用的终生用户上限)",
+        "test_users": ["jiaren.lu@garena.com", "wiaslu@gmail.com"],
+        "checked_on": "2026-08-01",
+        "ok": true,
+        "_history": "2026-08-01 之前是 External + Testing,且测试名单里只有 wiaslu@gmail.com(工作号本身不在名单里却能授权,疑似项目 Owner 豁免)——那是 refresh token 7 天过期的配置。当天已补名单并 Push to production,两账号 token 未受影响、复验 valid:true。发布后控制台不再显示 Test users 区(测试名单只在 Testing 状态下生效),上面记的名单是发布前的最终值,若日后 Back to testing 会重新出现。"
+      },
+      "install_cmd": "gog --client garena auth credentials <下载到的客户端JSON路径> --domain garena.com",
+      "note": "同 default:客户端建于 2026-03-16,早于 gog,原本给 Doc Reader MCP 用,gog 复用了它——换机别新建。访问该项目需用 jiaren.lu@garena.com 登录(个人号打开会报 resourcemanager.projects.get 缺少),且组织会要求重新验证密码。Garena 是受管租户,若授权被组织策略拦,需要 Workspace 管理员放行该 client_id"
+    }
+  },
+  "granted_services": [
+    "gmail",
+    "calendar",
+    "drive",
+    "docs",
+    "sheets",
+    "contacts"
+  ],
+  "_scope_note": [
+    "两个账号 2026-07-19 授权时拿的是同一批宽 scope(gmail.modify + gmail.send、drive 全量、spreadsheets、documents、",
+    "contacts、calendar,另含 chat/classroom/forms/script/cloud-platform 等)。scope 在授权那一刻固定,",
+    "要增减 scope 必须重跑 `gog --client <客户端> auth add <邮箱>` 重新授权。",
+    "日常调用一律加 --readonly / --gmail-no-send 兜底,不靠 scope 收窄来防误写。"
+  ],
+  "_verified": {
+    "on": "2026-08-01",
+    "machine": "MacBook(darwin 25.5.0)",
+    "gog_version": "v0.34.1",
+    "result": "两账号 auth list --check 均 valid:true;calendar/gmail 真实 API 调用打通;keyring backend=auto(macOS Keychain,application trust enabled)"
+  }
+}
