@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "meeting": {
+    "date": "YYYY-MM-DD",
+    "title": "会议主题"
+  },
+  "target": {
+    "mode": "feishu",
+    "document_url": "https://example.feishu.cn/docx/REPLACE_ME",
+    "account": "待按目标 URL 路由"
+  },
+  "operations": [
+    {
+      "id": "replace-summary-visual",
+      "action": "replace",
+      "anchor": {
+        "strategy": "block-id",
+        "value": "读取目标文档后填写"
+      },
+      "content": {
+        "kind": "board",
+        "source": "visuals/summary-board.json"
+      },
+      "constraints": {
+        "preserve_medium": "feishu-native-board",
+        "preserve_relations": true
+      },
+      "requires_delete_confirmation": true
+    },
+    {
+      "id": "replace-architecture-visual",
+      "action": "replace",
+      "anchor": {
+        "strategy": "block-id",
+        "value": "读取目标文档后填写"
+      },
+      "content": {
+        "kind": "image",
+        "source": "visuals/architecture.png",
+        "source_svg": "visuals/architecture.svg"
+      },
+      "constraints": {
+        "preserve_aspect_ratio": true,
+        "preserve_arrows": true
+      },
+      "requires_delete_confirmation": true
+    }
+  ],
+  "post_publish_checks": [
+    "目标块顺序正确",
+    "旧素材无残留",
+    "文末无重复内容",
+    "画板和图片实际可读",
+    "其他正文未被改动"
+  ]
+}
