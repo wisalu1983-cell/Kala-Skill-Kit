@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "decision-current-scope",
+      "kind": "decision",
+      "summary": "本轮只验证导航与交互闭环。",
+      "status": "confirmed",
+      "scope": "当前阶段",
+      "evidence": [
+        {
+          "timestamp": "00:00",
+          "speaker": "林青",
+          "quote": "这轮先把导航到交互完成的闭环跑通。"
+        }
+      ]
+    },
+    {
+      "id": "decision-separate-quality-gates",
+      "kind": "decision",
+      "summary": "流程稳定性与表现层质量分开验收。",
+      "status": "confirmed",
+      "scope": "当前阶段",
+      "evidence": [
+        {
+          "timestamp": "12:40",
+          "speaker": "陈岚",
+          "quote": "流程稳定和表现好不好应该分开看。"
+        }
+      ]
+    },
+    {
+      "id": "todo-acceptance-checklist",
+      "kind": "action_item",
+      "summary": "林青于 7 月 18 日前提交核心闭环验收清单。",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "timestamp": "18:05",
+          "speaker": "林青",
+          "quote": "我在 18 号前把验收清单给出来。"
+        }
+      ]
+    },
+    {
+      "id": "todo-presentation-rubric",
+      "kind": "action_item",
+      "summary": "整理表现层评价维度。",
+      "status": "unconfirmed",
+      "unresolved_reason": "会议没有确认负责人和日期。",
+      "evidence": []
+    },
+    {
+      "id": "future-growth-system",
+      "kind": "future_scope",
+      "summary": "长期成长系统留到下一阶段再决定。",
+      "status": "confirmed",
+      "evidence": [
+        {
+          "timestamp": "27:15",
+          "speaker": "陈岚",
+          "quote": "长期成长可以放到下一轮，先不定。"
+        }
+      ]
+    }
+  ]
+}

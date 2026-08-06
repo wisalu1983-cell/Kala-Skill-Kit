@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "target": {
+    "mode": "feishu",
+    "document_url": "https://example.feishu.cn/docx/replace-after-access",
+    "account": "route-by-url"
+  },
+  "operations": [
+    {
+      "id": "replace-summary-visual",
+      "action": "replace",
+      "anchor": {
+        "strategy": "block-id",
+        "value": "resolve-after-reading-target"
+      },
+      "content": {
+        "kind": "board",
+        "source": "visuals/summary-board.json"
+      },
+      "requires_delete_confirmation": true
+    },
+    {
+      "id": "replace-core-flow",
+      "action": "replace",
+      "anchor": {
+        "strategy": "block-id",
+        "value": "resolve-after-reading-target"
+      },
+      "content": {
+        "kind": "image",
+        "source": "visuals/core-flow.svg"
+      },
+      "requires_delete_confirmation": true
+    }
+  ]
+}
