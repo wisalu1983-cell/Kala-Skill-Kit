@@ -22,9 +22,9 @@ import { execFileSync } from 'child_process';
 
 const KIT_DIR = dirname(fileURLToPath(import.meta.url));
 const SRC = join(KIT_DIR, 'skills');
-const SKILLS = ['kala-handoff', 'kala-resume', 'kala-feishu', 'kala-gog'];
+const SKILLS = ['kala-handoff', 'kala-resume', 'kala-feishu', 'kala-gog', 'kala-meeting-minutes'];
 const TOOLS_ALL = ['claude', 'codex', 'cursor', 'openclaw'];
-const HOME = homedir();
+const HOME = process.env.KALA_SKILL_HOME || homedir();
 
 // ── 参数解析 ─────────────────────────────────────────────────────────────────
 let dryRun = false, doList = false, reqTools = '';
@@ -99,6 +99,7 @@ function installAsSkills(label, base, skip = {}) {
   const dest = join(base, 'skills');
   summary.push(`  ${label}  →  ${dest}`);
   let any = false;
+  const installed = [];
   for (const s of EFF_SKILLS) {
     any = true;
     const target = join(dest, s);
@@ -107,6 +108,7 @@ function installAsSkills(label, base, skip = {}) {
       if (!dryRun) rmSync(target, { recursive: true, force: true }); // 清掉历史遗留
       continue;
     }
+    installed.push(s);
     summary.push(`      - ${s} : ${existsSync(target) ? '覆盖(已存在)' : '新建'}`);
     if (!dryRun) {
       mkdirSync(dest, { recursive: true });
@@ -115,6 +117,12 @@ function installAsSkills(label, base, skip = {}) {
     }
   }
   if (!any) summary.push('      (本次没有要装到这里的 skill)');
+  if (installed.length) {
+    const mf = updateSkillManifest(dest, installed);
+    if (mf) summary.push(`      · _manifest.json: ${mf}`);
+    const idx = regenerateSkillIndex(dest);
+    if (idx) summary.push(`      · ${idx}`);
+  }
 }
 
 /** 这个 skill 带可执行脚本吗?带脚本的必须装成真正的 skill 目录,转不成单文件 command。 */
@@ -133,10 +141,10 @@ function readDescription(s) {
 }
 
 /**
- * Cursor 的 skills 根目录若带 `_manifest.json`(用户自建的目录管理体系),把新装的 skill 登记进去。
+ * skills 根目录若带 `_manifest.json`(用户自建的目录管理体系),把新装的 skill 登记进去。
  * 别的机器没有这套东西就跳过 —— 那边它只是个普通目录。
  */
-function updateCursorManifest(skillsRoot, names) {
+function updateSkillManifest(skillsRoot, names) {
   const mf = join(skillsRoot, '_manifest.json');
   if (!existsSync(mf)) return null;
   const raw = readFileSync(mf, 'utf8');
@@ -161,7 +169,7 @@ function updateCursorManifest(skillsRoot, names) {
 }
 
 /** 索引由该目录自带的 generate-index.ps1 生成(_index.md 头部写明「请勿手动编辑」),这里只负责触发它。 */
-function regenerateCursorIndex(skillsRoot) {
+function regenerateSkillIndex(skillsRoot) {
   const ps = join(skillsRoot, 'scripts', 'generate-index.ps1');
   if (!existsSync(ps)) return null;
   if (dryRun) return '将重新生成 _index.md';
@@ -198,9 +206,9 @@ function installAsCursor(base) {
         cpSync(join(SRC, s), target, { recursive: true });
       }
     }
-    const mf = updateCursorManifest(skillDest, withScripts);
+    const mf = updateSkillManifest(skillDest, withScripts);
     if (mf) summary.push(`      · _manifest.json: ${mf}`);
-    const idx = regenerateCursorIndex(skillDest);
+    const idx = regenerateSkillIndex(skillDest);
     if (idx) summary.push(`      · ${idx}`);
   }
 
@@ -233,10 +241,10 @@ if (wantTool('claude')) {
   else summary.push(`–  Claude Code 未发现 ${base},跳过`);
 }
 
-// Codex(默认 ~/.codex/skills 自动发现)
+// Codex 的可复用个人 skill 统一由 ~/.agents/skills 管理；~/.codex 只用于探测 Codex 是否已安装。
 if (wantTool('codex')) {
-  if (existsSync(join(HOME, '.codex'))) installAsSkills('Codex', process.env.CODEX_HOME || join(HOME, '.codex'));
-  else summary.push('–  Codex 未发现 ~/.codex,跳过');
+  if (existsSync(join(HOME, '.codex')) || existsSync(join(HOME, '.agents'))) installAsSkills('Codex', join(HOME, '.agents'));
+  else summary.push('–  Codex 未发现 ~/.codex 或 ~/.agents,跳过');
 }
 
 if (wantTool('cursor')) {
@@ -248,6 +256,7 @@ if (wantTool('cursor')) {
 const OPENCLAW_SKIP = {
   'kala-feishu': 'OpenClaw 自带飞书工具 feishu_doc/drive/wiki/perm',
   'kala-gog': 'OpenClaw 已有同源的 gog skill',
+  'kala-meeting-minutes': '依赖 kala-feishu,当前只部署到 Claude Code / Codex / Cursor',
 };
 if (wantTool('openclaw')) {
   const oc = [join(HOME, '.openclaw'), join(HOME, '.config', 'openclaw'), join(HOME, '.open-claw')].find(existsSync);
