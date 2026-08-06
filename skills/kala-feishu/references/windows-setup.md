@@ -17,7 +17,7 @@
 | 安装器 | `./install.sh`(薄封装) | **`node install.mjs`**(同一份逻辑) |
 | 运行期数据 | `~/.kala/feishu/` | `%USERPROFILE%\.kala\feishu\` |
 | Claude Code skills | `~/.claude/skills/` | `%USERPROFILE%\.claude\skills\` |
-| Codex skills | `~/.codex/skills/` | `%USERPROFILE%\.codex\skills\` |
+| Codex skills | `~/.agents/skills/` | `%USERPROFILE%\.agents\skills\` |
 | 设环境变量(单次) | `KALA_FEISHU_ACCOUNT=x node …` | `$env:KALA_FEISHU_ACCOUNT="x"; node …` |
 | 定时保活 | launchd plist | **任务计划程序**(Task Scheduler) |
 | 文件权限收紧 | `chmod 600`(脚本自动做) | `chmod` 无效(自动跳过),需 `icacls`(见下) |

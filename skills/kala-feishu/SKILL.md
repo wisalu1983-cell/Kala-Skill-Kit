@@ -16,7 +16,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob
 ```bash
 # macOS / Linux —— 常见位置(按你所在工具选一个存在的):
 #   Claude Code: ${CLAUDE_CONFIG_DIR:-~/.claude}/skills/kala-feishu
-#   Codex:       ${CODEX_HOME:-~/.codex}/skills/kala-feishu
+#   Codex:       ~/.agents/skills/kala-feishu
 SKILL_DIR="$HOME/.claude/skills/kala-feishu"   # ← 改成实际路径
 ```
 
