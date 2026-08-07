@@ -1,0 +1,41 @@
+{
+  "nodes": [
+    {
+      "type": "composite_shape",
+      "x": 0,
+      "y": 0,
+      "width": 420,
+      "height": 220,
+      "composite_shape": { "type": "round_rect" },
+      "style": {
+        "fill_color": "#E8F3FF",
+        "border_color": "#4C97FF",
+        "border_style": "solid",
+        "border_width": "narrow"
+      }
+    },
+    {
+      "type": "text_shape",
+      "x": 28,
+      "y": 28,
+      "width": 364,
+      "height": 52,
+      "text": {
+        "text": "本轮范围",
+        "font_size": 22,
+        "font_weight": "bold"
+      }
+    },
+    {
+      "type": "text_shape",
+      "x": 28,
+      "y": 92,
+      "width": 364,
+      "height": 96,
+      "text": {
+        "text": "只验证导航与交互闭环\n长期成长留到下一阶段",
+        "font_size": 17
+      }
+    }
+  ]
+}

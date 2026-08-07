@@ -11,12 +11,15 @@
 | **kala-resume** | 换设备/换 agent 后,从项目 `.handoff/` 恢复上一段工作:git pull → 按话题链列出 → 复述理解 → 等确认再动手。 |
 | **kala-feishu** | 用你本人的飞书身份(OAuth)读写/管理飞书云文档、知识库与两类表格(创建·写 Markdown 含表格图片·云盘目录·知识库节点·全文评论·电子表格单元格/工作表/行列·多维表格记录/字段)。多账号按租户自动选。含从零部署引导 + 自动化冒烟测试。纯 Node 脚本,零 npm 依赖。 |
 | **kala-gog** | 用你本人的 Google 身份(OAuth)读写 Gmail / 日历 / Drive / Docs / Sheets / Contacts,覆盖个人号与 Garena 工作号两个账号。底层是本地 `gog` CLI。含从零部署引导(装 CLI → 配 OAuth 客户端 → 逐账号授权 → 冒烟)与 Windows 指南。 |
+| **kala-meeting-minutes** | 根据会议录音转录、白板和样例纪要生成证据可追溯、范围准确、视觉可验收的会议纪要。发布到飞书时依赖 kala-feishu；无飞书能力时生成可换设备继续发布的本地纪要包。 |
 
 > 用 `kala-` 前缀是为了和其它来源的同名 skill(如项目 `.agents/skills/` 里的 `handoff`)区分开——同名 skill 在 Codex 等工具的选择器里不会合并、会各列一条。
 
 > **kala-feishu 说明**:它带 `scripts/`(纯 Node,零 npm 依赖)+ `references/`。skill 定义随 git 走;**运行期数据(App 凭证 / OAuth token / 目标位置)落在仓库外的 `~/.kala/feishu/`,不进 git**。每台设备首次用需部署一次(写凭证 + 浏览器授权一次),skill 的 SKILL.md 会引导。Claude Code / Codex / Cursor 三端都可用(OpenClaw 自带飞书工具,明确跳过)。
 
 > **kala-gog 说明**:它是**纯文档 skill**(无 `scripts/`),能力来自宿主机上的 [gogcli](https://github.com/openclaw/gogcli)——二进制命令名是 **`gog`**,不是 `gogcli`。所以"部署"= 装 CLI + 配 OAuth 客户端 + 逐账号授权,**凭证与 token 存进系统密钥链(macOS Keychain / Windows 凭据管理器),不进 git、不跨设备迁移**,换机重新授权一遍即可。账号名册见 [accounts.json](skills/kala-gog/references/accounts.json)。Claude Code / Codex / Cursor 三端可用(OpenClaw 侧已有同源的 `gog` skill,明确跳过)。
+
+> **kala-meeting-minutes 说明**:它带 `scripts/`、`references/` 和 `assets/`,在三端都安装为真正的 skill 目录。飞书读取、账号路由、图片、画板和文档块操作统一复用 kala-feishu,不另存凭证。没有飞书能力时,默认在当前项目 `.meeting-minutes/<日期>-<主题>/` 生成正文、证据映射、HTML 预览、视觉资产、发布计划和 QA 报告;不在项目中时使用 `~/Documents/Kala/MeetingMinutes/`。当前不装到 OpenClaw。
 
 ## 安装
 
@@ -33,9 +36,9 @@ cd ~/MyProjects/Kala-Skill-Kit
 
 `install.sh` 会:
 - **Claude Code**(`${CLAUDE_CONFIG_DIR:-~/.claude}`)→ 该目录下的 `skills/`。注意:Compass/企业版会用 `CLAUDE_CONFIG_DIR` 把配置目录改到别处(如 `~/.claude-compass`),installer 会自动认这个环境变量,装到它读的地方,而不是默认的 `~/.claude`。
-- **Codex**(`~/.codex`)→ `$CODEX_HOME/skills`(默认 `~/.codex/skills`,Codex 自带的 skill-installer/skill-creator 即从这里自动发现 skill)
+- **Codex**(探测 `~/.codex` 或 `~/.agents`)→ `~/.agents/skills/`。这是个人/可复用 skill 的管理目录;`~/.codex/skills` 仅保留系统或兼容内容,安装器不再往两处重复安装。
 - **OpenClaw**(`~/.openclaw`)→ `~/.openclaw/skills/`
-- **Cursor**(`~/.cursor`)→ 双轨:**带 `scripts/` 的 skill**(如 kala-feishu)装到 `~/.cursor/skills/<名>/`,并按该目录的约定登记 `_manifest.json`、调它自带的 `scripts/generate-index.ps1` 刷新 `_index.md`(没有这套管理文件的机器就只是普通目录);**纯文档的 skill** 生成自包含的 `commands/kala-handoff.md`、`kala-resume.md`、`kala-gog.md`(内容同源,供 `/` 斜杠命令调用)
+- **Cursor**(`~/.cursor`)→ 双轨:**带 `scripts/` 的 skill**(如 kala-feishu、kala-meeting-minutes)装到 `~/.cursor/skills/<名>/`,并按该目录的约定登记 `_manifest.json`、调它自带的 `scripts/generate-index.ps1` 刷新 `_index.md`(没有这套管理文件的机器就只是普通目录);**纯文档的 skill** 生成自包含的 `commands/kala-handoff.md`、`kala-resume.md`、`kala-gog.md`(内容同源,供 `/` 斜杠命令调用)
 - 某工具本机没装 → 跳过并在小结里标出。装好后重跑脚本增量补齐,幂等。
 
 改完任何 skill,重跑 `./install.sh` 覆盖更新;跨设备就 `git pull` 后再跑。
@@ -71,6 +74,8 @@ cd ~/MyProjects/Kala-Skill-Kit
 - Claude Code:`/kala-handoff`(可带话题名)、`/kala-resume`
 - Codex:输入 `$` 提及 skill 选 `kala-handoff` / `kala-resume`,或 `/skills` 查看,或自然语言描述意图
 - OpenClaw:自然语言触发(说「做个交接 / 恢复上次进度」)
+
+会议纪要任务在三端均可自然语言触发 `kala-meeting-minutes`;例如“根据这份录音转录生成飞书妙记式纪要”或“把白板结论原位替换进现有飞书纪要”。发布到飞书前需保证同一工具已安装并授权 `kala-feishu`。
 
 ## 加新 skill
 

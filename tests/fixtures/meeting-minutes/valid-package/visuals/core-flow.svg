@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title desc">
+  <title id="title">核心验证流程</title>
+  <desc id="desc">接收目标、导航、交互、结果验证的单向流程。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#646a73"/>
+    </marker>
+  </defs>
+  <rect width="1280" height="360" rx="24" fill="#f7f8fa"/>
+  <g font-family="system-ui, sans-serif" font-size="24" text-anchor="middle">
+    <rect x="70" y="120" width="230" height="100" rx="16" fill="#e8f3ff" stroke="#4c97ff"/>
+    <text x="185" y="180">接收目标</text>
+    <path d="M300 170 H390" stroke="#646a73" stroke-width="4" marker-end="url(#arrow)"/>
+    <rect x="400" y="120" width="230" height="100" rx="16" fill="#e8f7ee" stroke="#58b978"/>
+    <text x="515" y="180">导航</text>
+    <path d="M630 170 H720" stroke="#646a73" stroke-width="4" marker-end="url(#arrow)"/>
+    <rect x="730" y="120" width="230" height="100" rx="16" fill="#fff3e8" stroke="#f29b5c"/>
+    <text x="845" y="180">完成交互</text>
+    <path d="M960 170 H1050" stroke="#646a73" stroke-width="4" marker-end="url(#arrow)"/>
+    <rect x="1060" y="120" width="160" height="100" rx="16" fill="#f4efff" stroke="#8c6dd7"/>
+    <text x="1140" y="180">验证</text>
+  </g>
+</svg>
