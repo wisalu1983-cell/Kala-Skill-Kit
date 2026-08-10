@@ -251,7 +251,7 @@ export function parseMarkdownTable(lines, startIndex) {
  * 计算自适应列宽
  */
 /** 读取 PNG / JPEG 的像素尺寸（失败返回 null，调用方退回飞书自动检测） */
-function readImageSize(buf) {
+export function readImageSize(buf) {
   if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) {
     return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
   }
@@ -270,7 +270,7 @@ function readImageSize(buf) {
 }
 
 /** 按比例缩到 MAX_IMAGE_WIDTH x MAX_IMAGE_HEIGHT 内；本来就小于上限则原样返回 */
-function fitImageSize(size) {
+export function fitImageSize(size) {
   if (!size) return null;
   const r = Math.min(1, MAX_IMAGE_WIDTH / size.w, MAX_IMAGE_HEIGHT / size.h);
   return { width: Math.round(size.w * r), height: Math.round(size.h * r) };
