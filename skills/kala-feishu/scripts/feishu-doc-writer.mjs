@@ -44,8 +44,12 @@ const BT = {
 };
 
 // ─── 表格常量 ────────────────────────────────────────────────────────────────
-const DEFAULT_TABLE_WIDTH = 600; // 飞书默认表格总宽度（px）
+const DEFAULT_TABLE_WIDTH = 880; // 飞书文档内容区约 900px，留 20px 余量（原为 600，导致每张表浪费约三分之一宽度、短列被压到 MIN）
 const MIN_COLUMN_WIDTH = 60;
+// 图片显示尺寸上限（px）。replace_image 接受 width/height；不传则飞书按原始像素显示，
+// 2x 渲染的图会占满甚至超出一屏。按比例缩到框内，保持长宽比。
+const MAX_IMAGE_WIDTH = 880;
+const MAX_IMAGE_HEIGHT = 720;
 const MAX_COLUMN_WIDTH = 480;
 const MAX_CELLS = 499; // Descendant API 上限 1000 blocks，cells*2+1 ≤ 999 → cells ≤ 499
 
@@ -246,6 +250,32 @@ export function parseMarkdownTable(lines, startIndex) {
 /**
  * 计算自适应列宽
  */
+/** 读取 PNG / JPEG 的像素尺寸（失败返回 null，调用方退回飞书自动检测） */
+function readImageSize(buf) {
+  if (buf.length > 24 && buf.readUInt32BE(0) === 0x89504e47) {
+    return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) };
+  }
+  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i < buf.length - 9) {
+      if (buf[i] !== 0xff) { i++; continue; }
+      const m = buf[i + 1];
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) {
+        return { h: buf.readUInt16BE(i + 5), w: buf.readUInt16BE(i + 7) };
+      }
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
+  return null;
+}
+
+/** 按比例缩到 MAX_IMAGE_WIDTH x MAX_IMAGE_HEIGHT 内；本来就小于上限则原样返回 */
+function fitImageSize(size) {
+  if (!size) return null;
+  const r = Math.min(1, MAX_IMAGE_WIDTH / size.w, MAX_IMAGE_HEIGHT / size.h);
+  return { width: Math.round(size.w * r), height: Math.round(size.h * r) };
+}
+
 function calculateColumnWidths(rows, colCount) {
   const totalWidth = DEFAULT_TABLE_WIDTH;
 
@@ -804,9 +834,10 @@ export class FeishuDocWriter {
     if (!fileToken) throw new Error('Failed to upload image');
 
     // 4. 关联图片到 block
+    const fitted = fitImageSize(readImageSize(buffer));
     await this._patch(
       `/docx/v1/documents/${docToken}/blocks/${imageBlockId}`,
-      { replace_image: { token: fileToken } }
+      { replace_image: { token: fileToken, ...(fitted || {}) } }
     );
 
     return { success: true, block_id: imageBlockId, file_token: fileToken };
