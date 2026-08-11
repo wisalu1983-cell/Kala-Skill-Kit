@@ -13,8 +13,9 @@
  *
  * 阶段:P0 部署 · P1/P2 云盘文档 · P3/P4 知识库 · P5 token/错误码 · P6 评论
  *      P7 电子表格 · P8 多维表格 · P9 CLI 契约与删除门槛 · P10 体积保护/分批/URL 解析
+ *      P11 网络重试策略 · P12 画板(board)
  *
- * 退出码:所有「必需」用例(P0–P2、P5–P10)通过 = 0;有必需用例 FAIL = 1。
+ * 退出码:所有「必需」用例(P0–P2、P5–P12)通过 = 0;有必需用例 FAIL = 1。
  *        知识库用例(P3–P4)在本机无 wiki 条件时记为 SKIP,不影响退出码。
  */
 import { writeFileSync, unlinkSync, readFileSync, existsSync } from 'fs';
@@ -833,6 +834,159 @@ async function main() {
     if (calls !== 3) throw new Error(`幂等请求应共尝试 3 次(1 次 + 重试 2 次),实际 ${calls} 次`);
     if (!/重试/.test(msg)) throw new Error(`错误信息应说明重试过,实际: ${msg}`);
     return `尝试 ${calls} 次后如实报错`;
+  });
+
+  await run('P11.5', '「稍后重试」类业务码要自动重试(画板未就绪)', async () => {
+    const { api } = await import('./feishu-api.mjs');
+    const real = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async (...a) => {
+      calls++;
+      // 前两次冒充飞书的「画板还没初始化好」,第三次放行
+      if (calls <= 2) {
+        return new Response(JSON.stringify({ code: 2890007, msg: 'This whiteboard is not ready yet. Please try again later.' }),
+          { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return real(...a);
+    };
+    try {
+      const d = await api('GET', '/drive/explorer/v2/root_folder/meta');
+      if (!d?.token) throw new Error('重试后应拿到正常结果');
+      if (calls !== 3) throw new Error(`应重试到第 3 次,实际调用 ${calls} 次`);
+      return `2890007 被重试,第 ${calls} 次成功`;
+    } finally { globalThis.fetch = real; }
+  });
+
+  await run('P11.6', '「稍后重试」类业务码对非幂等请求也要重试', async () => {
+    const { api } = await import('./feishu-api.mjs');
+    const real = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async (...a) => {
+      calls++;
+      if (calls <= 2) {
+        return new Response(JSON.stringify({ code: 2890007, msg: 'not ready yet' }),
+          { status: 200, headers: { 'content-type': 'application/json' } });
+      }
+      return real(...a);
+    };
+    let err = null, created = null;
+    try {
+      // POST 默认不幂等,但 2890007 表示「压根没执行」,重发不会写两份 —— 必须重试
+      const d = await api('POST', '/docx/v1/documents', { body: { title: `__retry_probe__${TS}` } });
+      created = d.document?.document_id;
+    } catch (e) { err = e; }
+    finally { globalThis.fetch = real; }
+    // 第 3 次是真请求,真建出来了就删掉,别留垃圾
+    if (created) {
+      try { await api('DELETE', `/drive/v1/files/${created}`, { query: { type: 'docx' } }); }
+      catch { console.error(`     (提示:探测文档未删掉 ${created})`); }
+    }
+    if (calls !== 3) throw new Error(`非幂等请求遇 2890007 也应重试到第 3 次,实际 ${calls} 次`);
+    if (err) throw new Error(`第 3 次真实请求失败: ${err.message.slice(0, 120)}`);
+    return `非幂等请求也重试,共 ${calls} 次`;
+  });
+
+  // ── P12 画板(board)──────────────────────────────────────────
+  let wbToken;
+  await run('P12.1', 'board·在文档里插入画板块', async () => {
+    const B = await import('./feishu-board.mjs');
+    const r = await B.insertBoard(docToken);
+    wbToken = r.whiteboard_token;
+    if (!wbToken) throw new Error(`未返回 whiteboard_token: ${JSON.stringify(r)}`);
+    if (r.block_type !== 43) throw new Error(`画板块的 block_type 应为 43,实际 ${r.block_type}`);
+    return `${wbToken}(block ${r.block_id})`;
+  });
+
+  await run('P12.2', 'board·批量创建节点(形状+文字)', async () => {
+    const B = await import('./feishu-board.mjs');
+    const r = await B.addNodes(wbToken, [
+      { type: 'composite_shape', x: 0, y: 0, width: 300, height: 160,
+        composite_shape: { type: 'round_rect' },
+        style: { fill_color: '#eaf3ff', border_color: '#d0d7de' } },
+      { type: 'text_shape', x: 24, y: 20, width: 250, height: 40,
+        text: { text: '自检标题', font_size: 20, font_weight: 'bold' } },
+      { type: 'text_shape', x: 24, y: 70, width: 250, height: 60,
+        text: { text: '自检正文', font_size: 14 } },
+    ]);
+    if (r.created !== 3) throw new Error(`应创建 3 个节点,实际 ${JSON.stringify(r)}`);
+    return `${r.created} 个节点`;
+  });
+
+  await run('P12.3', 'board·读回节点并校验文字', async () => {
+    const B = await import('./feishu-board.mjs');
+    const { nodes } = await B.listNodes(wbToken);
+    if (nodes.length !== 3) throw new Error(`应读回 3 个节点,实际 ${nodes.length}`);
+    const texts = nodes.map(n => n.text?.text).filter(Boolean);
+    for (const want of ['自检标题', '自检正文']) {
+      if (!texts.includes(want)) throw new Error(`读回的文字里缺「${want}」: ${JSON.stringify(texts)}`);
+    }
+    const shape = nodes.find(n => n.type === 'composite_shape');
+    if (shape?.style?.fill_color?.toLowerCase() !== '#eaf3ff') {
+      throw new Error(`填充色应为 #eaf3ff,实际 ${shape?.style?.fill_color}`);
+    }
+    return '3 个节点,文字与填充色都对得上';
+  });
+
+  await run('P12.4', 'board·颜色名要在本地被拦住(不能甩飞书的笼统报错)', async () => {
+    const B = await import('./feishu-board.mjs');
+    let msg = '';
+    try {
+      await B.addNodes(wbToken, [{ type: 'composite_shape', x: 400, y: 0, width: 100, height: 50,
+        composite_shape: { type: 'round_rect' }, style: { fill_color: 'blue' } }]);
+      throw new Error('颜色名 blue 竟然被放过了');
+    } catch (e) { msg = e.message; }
+    // 飞书只会回一句笼统的 field validation failed,脚本必须在本地就说清是哪个字段错、要什么格式
+    if (/field validation failed/i.test(msg)) throw new Error(`不该把飞书的笼统报错直接抛出: ${msg}`);
+    if (!/fill_color/.test(msg)) throw new Error(`报错要点明是 fill_color: ${msg}`);
+    if (!/#/.test(msg)) throw new Error(`报错要说明需要 #RRGGBB 格式: ${msg}`);
+    return '本地拦下并给出可读报错';
+  });
+
+  await run('P12.5', 'board·不支持的形状要在本地被拦住', async () => {
+    const B = await import('./feishu-board.mjs');
+    let msg = '';
+    try {
+      await B.addNodes(wbToken, [{ type: 'composite_shape', x: 400, y: 100, width: 100, height: 50,
+        composite_shape: { type: 'arrow' } }]);
+      throw new Error('arrow 竟然被放过了(实测飞书不支持)');
+    } catch (e) { msg = e.message; }
+    if (/field validation failed/i.test(msg)) throw new Error(`不该甩飞书的笼统报错: ${msg}`);
+    if (!/arrow/.test(msg)) throw new Error(`报错要点明是 arrow: ${msg}`);
+    return '本地拦下';
+  });
+
+  await run('P12.6', 'board·导出为图片(写到文件)', async () => {
+    const B = await import('./feishu-board.mjs');
+    const out = join(tmpdir(), `kala-board-${TS}.jpg`);
+    try {
+      const r = await B.exportImage(wbToken, out);
+      if (!existsSync(out)) throw new Error('没生成图片文件');
+      const size = readFileSync(out).length;
+      if (size < 1000) throw new Error(`图片过小,可能不是有效图片: ${size} 字节`);
+      if (r.bytes !== size) throw new Error(`返回的 bytes(${r.bytes})与实际文件大小(${size})不一致`);
+      return `${size} 字节`;
+    } finally {
+      try { unlinkSync(out); } catch { /* 临时文件 */ }
+    }
+  });
+
+  await run('P12.7', 'board·CLI 契约(insert/nodes/shapes/未知命令)', async () => {
+    const ins = runCli('feishu-board.mjs', ['insert', docToken]);
+    if (ins.code !== 0) throw new Error(`insert 退出码 ${ins.code}: ${ins.stderr.slice(0, 160)}`);
+    const j = JSON.parse(ins.stdout);
+    if (!j.whiteboard_token) throw new Error(`insert 未返回 whiteboard_token: ${ins.stdout.slice(0, 160)}`);
+
+    const nodes = runCli('feishu-board.mjs', ['nodes', j.whiteboard_token]);
+    if (nodes.code !== 0) throw new Error(`nodes 退出码 ${nodes.code}: ${nodes.stderr.slice(0, 160)}`);
+    if (typeof JSON.parse(nodes.stdout).count !== 'number') throw new Error('nodes 应返回 count');
+
+    const sh = JSON.parse(runCli('feishu-board.mjs', ['shapes']).stdout);
+    if (!sh.usable?.includes('round_rect')) throw new Error(`shapes 输出异常: ${JSON.stringify(sh)}`);
+
+    const bad = runCli('feishu-board.mjs', ['没这个命令']);
+    if (bad.code === 0) throw new Error('未知命令竟返回 0');
+    if (!/用法/.test(bad.stdout + bad.stderr)) throw new Error('未知命令应打印用法');
+    return 'insert/nodes/shapes/未知命令 都符合契约';
   });
 
   // ── P5 token / 错误码 ────────────────────────────────────────

@@ -1,10 +1,12 @@
 {
-  "_comment": "kala-feishu 云文档能力标准集。权限名取自真实已授权应用的 /application/v6/scopes 返回,非杜撰。用法:开发者后台 → 权限管理 → 导入 → 粘贴本文件 → 创建版本 → 发布 → 管理员审核。【已接入多个组织要对齐时】改用 scripts/feishu-scope-plan.mjs 生成「该应用的终态」文件——它会保留该应用原有的 IM 等能力,避免导入若为覆盖式而丢功能。通讯录 contact 刻意不含(2026-07 决定;真需要 open_id→姓名 / @人 / 按部门共享 时再补)。",
+  "_comment": "kala-feishu 云文档能力标准集。权限名取自真实已授权应用的 /application/v6/scopes 返回,非杜撰。用法:开发者后台 → 权限管理 → 导入 → 粘贴本文件 → 创建版本 → 发布 → 管理员审核。【已接入多个组织要对齐时】改用 scripts/feishu-scope-plan.mjs 生成「该应用的终态」文件——它会保留该应用原有的 IM 等能力,避免导入若为覆盖式而丢功能。画板 board 权限已含(2026-07 验证:插入画板块不需要它,创建/读节点需要,且属用户身份 → 加完须重跑 OAuth)。通讯录 contact 刻意不含(2026-07 决定;真需要 open_id→姓名 / @人 / 按部门共享 时再补)。",
   "scopes": {
     "tenant": [
       "base:record:retrieve",
       "bitable:app",
       "bitable:app:readonly",
+      "board:whiteboard:node:create",
+      "board:whiteboard:node:read",
       "docs:doc",
       "docs:document:export",
       "docx:document",
@@ -26,6 +28,8 @@
       "base:record:retrieve",
       "bitable:app",
       "bitable:app:readonly",
+      "board:whiteboard:node:create",
+      "board:whiteboard:node:read",
       "docs:doc",
       "docs:document:export",
       "docx:document",

@@ -68,6 +68,21 @@ function isTransientNetworkError(e) {
   return /fetch failed|socket hang up|network|timeout/i.test(e.message || '');
 }
 
+/**
+ * 飞书业务错误码里,少数是「资源还没就绪 / 稍后再试」——它们表示请求**压根没被执行**,
+ * 所以**无条件重试都安全**,连非幂等的 POST 也不会写出两份。
+ *
+ * 2890007: 刚插入的画板后端还在异步初始化,立刻读写节点会撞上;
+ *          「插入画板 → 马上写节点」正是最自然的用法,不重试就会间歇性失败。
+ */
+const RETRYABLE_FEISHU_CODES = new Set([2890007]);
+
+/** 这个错误值得再试一次吗? */
+function shouldRetry(e) {
+  if (e?.feishuCode !== undefined) return RETRYABLE_FEISHU_CODES.has(e.feishuCode);
+  return isTransientNetworkError(e);
+}
+
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 /**
@@ -101,20 +116,26 @@ export async function api(method, path, opts = {}) {
     init.body = JSON.stringify(body);
   }
 
-  const maxAttempts = retryable ? RETRY_ATTEMPTS + 1 : 1;
+  // 上限按最宽的算;非幂等请求遇到网络错会在下面提前退出,遇到「未就绪」类业务码则继续重试
+  const maxAttempts = RETRY_ATTEMPTS + 1;
   let lastErr;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (attempt > 1) await sleep(RETRY_BASE_MS * (attempt - 1));
     try {
       const r = await fetch(`${FEISHU_BASE}${path}${qs}`, init);
       const d = await r.json();
-      if (d.code !== 0) throw new Error(`Feishu ${d.code}: ${d.msg} [${method} ${path}]`);
+      if (d.code !== 0) {
+        const err = new Error(`Feishu ${d.code}: ${d.msg} [${method} ${path}]`);
+        err.feishuCode = d.code; // 供 shouldRetry 判断是否属「稍后再试」类
+        throw err;
+      }
       return d.data;
     } catch (e) {
-      if (!isTransientNetworkError(e)) throw e; // 业务错误:重试无意义
+      if (!shouldRetry(e)) throw e; // 普通业务错误(权限/参数):重试无意义
       lastErr = e;
-      if (!retryable) {
-        // 关键:网络中断可能发生在「飞书已执行、响应回程断了」,盲目重发会写两遍。
+      // 网络中断且请求非幂等 → 不能重发(可能已执行、只是响应丢了)。
+      // 「未就绪」类业务码不受此限:它表示压根没执行,重发安全。
+      if (e.feishuCode === undefined && !retryable) {
         throw new Error(
           `网络中断: ${e.message} [${method} ${path}] —— 这是非幂等请求,**可能已生效**,` +
           '故不自动重试。请先核对现状(读一次看数据在不在)再决定是否重发。'
@@ -122,7 +143,8 @@ export async function api(method, path, opts = {}) {
       }
     }
   }
-  throw new Error(`网络中断: ${lastErr.message} [${method} ${path}] —— 已重试 ${RETRY_ATTEMPTS} 次仍失败。`);
+  const why = lastErr.feishuCode !== undefined ? lastErr.message : `网络中断: ${lastErr.message}`;
+  throw new Error(`${why} [${method} ${path}] —— 已重试 ${RETRY_ATTEMPTS} 次仍失败。`);
 }
 
 /** multipart/form-data 上传(飞书上传接口用)。fields: [[name, value, {filename, contentType}?], ...] */

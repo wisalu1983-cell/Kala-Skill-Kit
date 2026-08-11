@@ -1,7 +1,7 @@
 ---
 name: kala-feishu
-description: 用你本人的飞书身份(OAuth)读写/管理飞书云文档、知识库与两类表格。能创建/写入/追加 Markdown(标题·列表·表格·代码·图片)、管理云盘目录、浏览与新建知识库节点、读写电子表格(单元格·工作表·行列)与多维表格(记录·字段)。支持在任意机器从零部署:agent 一步步引导用户建应用、授权、验证。当用户提到「飞书文档/云文档/云盘/知识库/wiki/写进飞书/飞书目录/飞书表格/多维表格」时触发。
-trigger_keywords: 飞书, 飞书文档, 云文档, 飞书云盘, 知识库, wiki, 写进飞书, 飞书目录, docx, 飞书表格, 电子表格, 多维表格, sheets, bitable, 表格数据
+description: 用你本人的飞书身份(OAuth)读写/管理飞书云文档、知识库与两类表格。能创建/写入/追加 Markdown(标题·列表·表格·代码·图片)、管理云盘目录、浏览与新建知识库节点、读写电子表格(单元格·工作表·行列)与多维表格(记录·字段)、在文档里创建原生画板并生成节点(形状·文字·卡片版面)。支持在任意机器从零部署:agent 一步步引导用户建应用、授权、验证。当用户提到「飞书文档/云文档/云盘/知识库/wiki/写进飞书/飞书目录/飞书表格/多维表格」时触发。
+trigger_keywords: 飞书, 飞书文档, 云文档, 飞书云盘, 知识库, wiki, 写进飞书, 飞书目录, docx, 飞书表格, 电子表格, 多维表格, sheets, bitable, 表格数据, 画板, 白板, board, whiteboard, 卡片
 allowed-tools: Bash, Read, Write, Edit, Glob
 ---
 
@@ -16,7 +16,7 @@ allowed-tools: Bash, Read, Write, Edit, Glob
 ```bash
 # macOS / Linux —— 常见位置(按你所在工具选一个存在的):
 #   Claude Code: ${CLAUDE_CONFIG_DIR:-~/.claude}/skills/kala-feishu
-#   Codex:       ${CODEX_HOME:-~/.codex}/skills/kala-feishu
+#   Codex:       ~/.agents/skills/kala-feishu
 SKILL_DIR="$HOME/.claude/skills/kala-feishu"   # ← 改成实际路径
 ```
 
@@ -57,7 +57,7 @@ node "$SKILL_DIR/scripts/feishu-oauth.mjs" status
    ```bash
    node "$SKILL_DIR/scripts/selftest.mjs"
    ```
-   P0–P2、P5–P10 必须全绿(P7/P8 表格、P9 CLI 契约、P10 体积保护与 URL 解析)。
+   P0–P2、P5–P12 必须全绿(P7/P8 表格、P9 CLI 契约、P10 体积保护与 URL 解析、P11 网络重试、P12 画板)。
    无可写知识库空间时 P3–P4 记 SKIP(正常)。开发期可用 `--only P7,P8` 只跑指定阶段。
 8. 🤖 **注册 token 自动保活(不要跳过)** —— 不配的话某组织 ~30 天没用就要重新授权:
    ```bash
@@ -202,6 +202,55 @@ node "$B" delrec   <token|url> <table_id> <record_id...> --yes
 - **读大表**:`records` 默认最多 200 条,续读用 `--page-token <上次返回的 next_page_token>`(bitable 是游标分页,不能按 offset 跳);全量导出用 `--out data.csv`。
 - 批量写/删超过 500 条时脚本自动分批;某批失败会报清楚「已成功几批」,**不会假装整体成功、也不会回滚**。
 - 文本字段飞书返的是富文本数组,脚本已归一化成纯字符串;多选/附件/人员等保持原结构。
+
+### 画板(Board / 白板)
+
+层级:文档里插入一个 `block_type=43` 的画板块 → 该块的 `board.token` 是 **whiteboard_token** → 往画板里创建「节点」。
+节点是**绝对坐标**定位(x/y/width/height),不像文档按流排版,所以能精确摆出卡片、流程图这类版面。
+
+```bash
+BD="$SKILL_DIR/scripts/feishu-board.mjs"
+node "$BD" insert <doc_token|url>              # 在文档里插入画板块 → 返回 whiteboard_token
+node "$BD" nodes  <whiteboard_token>           # 读画板所有节点
+node "$BD" add    <whiteboard_token> <nodes.json>  # 批量创建节点(数组 或 {"nodes":[...]})
+node "$BD" image  <whiteboard_token> <输出.jpg>     # 导出画板为图片(JPEG)
+node "$BD" shapes                              # 列出实测可用的形状
+```
+
+节点最小结构(一张卡片 = 背景块 + 标题 + 正文 + 标签,4 个节点):
+
+```json
+[
+  {"type":"composite_shape","x":0,"y":0,"width":380,"height":230,
+   "composite_shape":{"type":"round_rect"},
+   "style":{"fill_color":"#eaf3ff","border_color":"#d0d7de","border_style":"solid","border_width":"narrow"}},
+  {"type":"text_shape","x":28,"y":26,"width":320,"height":40,
+   "text":{"text":"卡片标题","font_size":20,"font_weight":"bold"}},
+  {"type":"text_shape","x":28,"y":78,"width":320,"height":96,
+   "text":{"text":"卡片正文","font_size":14}},
+  {"type":"composite_shape","x":28,"y":182,"width":96,"height":30,
+   "composite_shape":{"type":"round_rect"},"style":{"fill_color":"#2b7fff"},
+   "text":{"text":"标签","font_size":12,"horizontal_align":"center","vertical_align":"mid"}}
+]
+```
+
+**可用形状**(实测):`round_rect` `rect` `ellipse` `diamond` `triangle` `star` `parallelogram`。`arrow` 会被飞书拒。
+
+**两个必须知道的坑**(都已做成本地前置校验,报错会直接点明字段):
+
+- **颜色必须 `#RRGGBB`**:`"fill_color":"blue"` 会被飞书拒。
+- **飞书先校验字段、后检查权限**:结构写错时只回一句笼统的 `99992402 field validation failed`,
+  看起来像"接口不通"或"没权限",极易误判成权限问题。本脚本把已知约束在本地拦下,不把这个笼统报错甩给你。
+
+**权限分两层,别混**:
+
+| 操作 | 需要的权限 |
+|---|---|
+| 插入画板块(空画板) | **不需要画板权限**,`docx:document` 就够 |
+| 创建 / 读节点、导出图片 | `board:whiteboard:node:create` + `board:whiteboard:node:read` |
+
+这两个是**用户身份**权限,后台加完发布审核后**必须重跑 `feishu-oauth.mjs auth`**,旧 token 不会自动带上。
+报 `2890005 Edit acl error whiteboard` 不是缺权限,是该身份对那篇文档没有编辑权(本 skill 全程用你本人身份,日常不会遇到)。
 
 ### 记住目标位置
 

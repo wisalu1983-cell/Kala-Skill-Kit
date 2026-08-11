@@ -20,7 +20,7 @@
 | 密钥存储 | macOS Keychain | **Windows 凭据管理器**(wincred),`keyring_backend=auto` 自动选 |
 | skill 安装器 | `./install.sh`(薄封装) | **`node install.mjs`**(同一份逻辑) |
 | Claude Code skills | `~/.claude/skills/` | `%USERPROFILE%\.claude\skills\` |
-| Codex skills | `~/.codex/skills/` | `%USERPROFILE%\.codex\skills\` |
+| Codex skills | `~/.agents/skills/` | `%USERPROFILE%\.agents\skills\` |
 | 设环境变量(单次) | `GOG_CLIENT=garena gog …` | `$env:GOG_CLIENT="garena"; gog …` |
 | 路径带空格 | 引号 | 引号,且反斜杠在双引号里要留意转义,优先用单引号 |
 

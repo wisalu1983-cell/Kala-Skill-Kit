@@ -28,6 +28,7 @@ const DOC_SCOPES = [
   'wiki:wiki', 'wiki:wiki:readonly', 'wiki:node:read', 'wiki:space:retrieve',
   'sheets:spreadsheet', 'sheets:spreadsheet:readonly',
   'bitable:app', 'bitable:app:readonly', 'base:record:retrieve',
+  'board:whiteboard:node:create', 'board:whiteboard:node:read',
   'slides:presentation:read',
 ];
 // 明确不纳入的(2026-07 决定:通讯录暂不开,真需要时去掉这条规则即可)
