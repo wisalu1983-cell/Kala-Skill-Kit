@@ -12,6 +12,9 @@
 | **kala-feishu** | 用你本人的飞书身份(OAuth)读写/管理飞书云文档、知识库与两类表格(创建·写 Markdown 含表格图片·云盘目录·知识库节点·全文评论·电子表格单元格/工作表/行列·多维表格记录/字段)。多账号按租户自动选。含从零部署引导 + 自动化冒烟测试。纯 Node 脚本,零 npm 依赖。 |
 | **kala-gog** | 用你本人的 Google 身份(OAuth)读写 Gmail / 日历 / Drive / Docs / Sheets / Contacts,覆盖个人号与 Garena 工作号两个账号。底层是本地 `gog` CLI。含从零部署引导(装 CLI → 配 OAuth 客户端 → 逐账号授权 → 冒烟)与 Windows 指南。 |
 | **kala-meeting-minutes** | 根据会议录音转录、白板和样例纪要生成证据可追溯、范围准确、视觉可验收的会议纪要。发布到飞书时依赖 kala-feishu；无飞书能力时生成可换设备继续发布的本地纪要包。 |
+| **kala-design-doc** | 创建、编辑、改写或审核中文功能设计文档。用语义底账防止措辞优化改变原意，并检查职责越界、语义重复、抽象术语、无效举例和不必要的技术细节。 |
+
+仓库还维护一份不属于 Skill 的[全局对话表达规范](global-instructions/dialogue-style.md)。它负责日常问答的直答、非技术表达和信息密度；`kala-design-doc` 只在实际创建、修改或审核设计文档时运行。
 
 > 用 `kala-` 前缀是为了和其它来源的同名 skill(如项目 `.agents/skills/` 里的 `handoff`)区分开——同名 skill 在 Codex 等工具的选择器里不会合并、会各列一条。
 
@@ -53,9 +56,14 @@ cd ~/MyProjects/Kala-Skill-Kit
 ./install.sh kala-handoff kala-resume            # 只装指定的 skill
 ./install.sh --tools codex,claude                # 只装到指定工具(claude/codex/cursor/openclaw)
 ./install.sh --dry-run --tools codex kala-feishu # 组合:先预览,确认后去掉 --dry-run 再真装
+./install.sh --dry-run --dialogue-style           # 预览 Codex / Claude Code 全局对话规范
+./install.sh --dialogue-style                     # 只安装全局对话规范,不安装 skill
+./install.sh --dialogue-style kala-design-doc     # 同时安装对话规范和指定 skill
 ```
 
 `--dry-run` 加在任何命令上都是「只看不装」;看清楚了去掉它再跑一次才真正安装。
+
+`--dialogue-style` 使用带标记的受管区块更新 `~/.codex/AGENTS.md` 和 `${CLAUDE_CONFIG_DIR:-~/.claude}/CLAUDE.md`。目标文件为空时可直接创建；已有完整 Kala 标记时只更新标记内内容,保留区块外规则；若文件非空但没有完整标记,安装器会暂停且不修改任何目标文件,由 agent 对照[新规则](global-instructions/dialogue-style.md)与现有规则,先向用户提出保留、合并和冲突处理建议。安装一次后,规范会在两个工具的日常对话中自动生效；跨设备时 `git pull` 后重跑该命令。
 
 > 如果你是**负责部署的 agent**,规则和推荐流程见 [AGENTS.md](AGENTS.md)(Claude Code 经 `CLAUDE.md` 自动读取)。
 
@@ -76,6 +84,8 @@ cd ~/MyProjects/Kala-Skill-Kit
 - OpenClaw:自然语言触发(说「做个交接 / 恢复上次进度」)
 
 会议纪要任务在三端均可自然语言触发 `kala-meeting-minutes`;例如“根据这份录音转录生成飞书妙记式纪要”或“把白板结论原位替换进现有飞书纪要”。发布到飞书前需保证同一工具已安装并授权 `kala-feishu`。
+
+中文游戏策划案、功能说明、产品需求、PRD、交互说明和 UI/UX 设计等文档的创建、编辑、改写与审核会触发 `kala-design-doc`。它先从项目规范中建立文档契约,再在契约内检查语义失真、职责越界、重复和抽象表达；项目明确要求的模板、字段和验收交付物不会被通用规则擅自删改。普通方案讨论或读取文档后回答问题不触发。
 
 ## 加新 skill
 

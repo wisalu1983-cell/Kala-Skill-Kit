@@ -7,6 +7,7 @@
  *   node install.mjs                       全部 skill → 所有探测到的工具(默认)
  *   node install.mjs kala-handoff          只装指定的 skill(可多个)
  *   node install.mjs --tools codex,claude  只装到指定工具(claude/codex/cursor/openclaw)
+ *   node install.mjs --dialogue-style      安装全局对话规范到 Codex / Claude Code
  *   node install.mjs --dry-run [...]       只预览会装/覆盖/跳过什么,不改动任何文件
  *   node install.mjs --list                列出可选 skill / 工具后退出
  *   node install.mjs --help                显示帮助
@@ -22,12 +23,13 @@ import { execFileSync } from 'child_process';
 
 const KIT_DIR = dirname(fileURLToPath(import.meta.url));
 const SRC = join(KIT_DIR, 'skills');
-const SKILLS = ['kala-handoff', 'kala-resume', 'kala-feishu', 'kala-gog', 'kala-meeting-minutes'];
+const DIALOGUE_STYLE = join(KIT_DIR, 'global-instructions', 'dialogue-style.md');
+const SKILLS = ['kala-handoff', 'kala-resume', 'kala-feishu', 'kala-gog', 'kala-meeting-minutes', 'kala-design-doc'];
 const TOOLS_ALL = ['claude', 'codex', 'cursor', 'openclaw'];
 const HOME = process.env.KALA_SKILL_HOME || homedir();
 
 // ── 参数解析 ─────────────────────────────────────────────────────────────────
-let dryRun = false, doList = false, reqTools = '';
+let dryRun = false, doList = false, doDialogueStyle = false, reqTools = '';
 const reqSkills = [];
 const argv = process.argv.slice(2);
 
@@ -35,9 +37,11 @@ function usage() {
   console.log(`用法: node install.mjs [选项] [skill 名...]
 
 不带参数 = 全部 skill 装到所有探测到的工具(默认行为)。
+只带 --dialogue-style = 只安装全局对话规范,不安装 skill。
 
 选项:
   --tools a,b     只装到这些工具(可选: ${TOOLS_ALL.join(' ')})
+  --dialogue-style 把全局对话规范写入 Codex / Claude Code 的用户级配置
   --dry-run       只预览会装/覆盖/跳过什么,不真正改动任何文件
   --list          列出可选 skill 和工具,然后退出
   -h, --help      显示本帮助
@@ -46,6 +50,8 @@ function usage() {
   node install.mjs --dry-run                     预览默认的全量安装
   node install.mjs kala-handoff kala-resume      只装这两个
   node install.mjs --tools codex kala-feishu     只把 kala-feishu 装到 Codex
+  node install.mjs --dialogue-style              只安装全局对话规范
+  node install.mjs --dialogue-style kala-design-doc  同时安装对话规范和指定 skill
   node install.mjs --dry-run --tools claude      预览:只装到 Claude Code`);
 }
 
@@ -53,6 +59,7 @@ for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === '--dry-run') dryRun = true;
   else if (a === '--list') doList = true;
+  else if (a === '--dialogue-style') doDialogueStyle = true;
   else if (a === '--tools') {
     if (++i >= argv.length) { console.error('错误: --tools 后面要跟工具名'); process.exit(1); }
     reqTools = argv[i];
@@ -71,12 +78,13 @@ if (reqTools) {
   }
 }
 
-const EFF_SKILLS = reqSkills.length ? reqSkills : SKILLS;
+const EFF_SKILLS = reqSkills.length ? reqSkills : (doDialogueStyle ? [] : SKILLS);
 const wantTool = (t) => !reqTools || reqTools.split(',').includes(t);
 
 if (doList) {
   console.log(`可选 skill:  ${SKILLS.join(' ')}`);
   console.log(`可选工具:    ${TOOLS_ALL.join(' ')}`);
+  console.log('全局规范:    --dialogue-style → Codex / Claude Code 用户级配置');
   console.log('默认行为:    不带参数 = 全部 skill → 所有探测到的工具(kala-feishu / kala-gog 不装到 OpenClaw)');
   process.exit(0);
 }
@@ -93,6 +101,91 @@ function stripFm(file) {
 }
 
 const summary = [];
+
+const DIALOGUE_START = '<!-- kala-skill-kit:dialogue-style:start -->';
+const DIALOGUE_END = '<!-- kala-skill-kit:dialogue-style:end -->';
+
+/**
+ * 只管理带标记的区块。
+ * 非空文件若没有完整标记，必须先由 agent 判断语义重叠与冲突，并取得用户确认；安装器不自动追加。
+ */
+function planManagedDialogueBlock(label, target) {
+  const source = readFileSync(DIALOGUE_STYLE, 'utf8').trim();
+  const block = `${DIALOGUE_START}\n${source}\n${DIALOGUE_END}`;
+  const existed = existsSync(target);
+  const current = existed ? readFileSync(target, 'utf8') : '';
+  const start = current.indexOf(DIALOGUE_START);
+  const end = current.indexOf(DIALOGUE_END);
+  const starts = current.split(DIALOGUE_START).length - 1;
+  const ends = current.split(DIALOGUE_END).length - 1;
+
+  if (starts === 1 && ends === 1 && end >= start) {
+    const after = end + DIALOGUE_END.length;
+    return {
+      label,
+      target,
+      blocked: false,
+      action: '更新受管区块(保留区块外内容)',
+      next: current.slice(0, start) + block + current.slice(after),
+    };
+  }
+
+  if (starts !== 0 || ends !== 0) {
+    return {
+      label,
+      target,
+      blocked: true,
+      reason: 'Kala 标记不完整或重复，为避免破坏文件已暂停',
+    };
+  }
+
+  if (current.trim()) {
+    return {
+      label,
+      target,
+      blocked: true,
+      reason: '检测到未受管的现有规则，需先比较同义项与冲突项',
+    };
+  }
+
+  return {
+    label,
+    target,
+    blocked: false,
+    action: existed ? '写入空文件' : '新建',
+    next: `${block}\n`,
+  };
+}
+
+function applyDialoguePlans(plans) {
+  const blocked = plans.filter(plan => plan.blocked);
+  const blockBatch = blocked.length > 0;
+
+  for (const plan of plans) {
+    summary.push(`  ${plan.label}  →  ${plan.target}`);
+    if (plan.blocked) {
+      summary.push(`      - 全局对话规范 : 暂停，未修改`);
+      summary.push(`        原因: ${plan.reason}`);
+      summary.push(`        现有规则: ${plan.target}`);
+      summary.push(`        新规则: ${DIALOGUE_STYLE}`);
+      continue;
+    }
+    if (blockBatch) {
+      summary.push('      - 全局对话规范 : 同批次存在待确认文件，暂不修改');
+      continue;
+    }
+    summary.push(`      - 全局对话规范 : ${plan.action}`);
+    if (!dryRun) {
+      mkdirSync(dirname(plan.target), { recursive: true });
+      writeFileSync(plan.target, plan.next, 'utf8');
+    }
+  }
+
+  if (blocked.length) {
+    summary.push('  下一步: 由 agent 对照现有规则与新规则，提出保留 / 合并 / 冲突处理建议；用户确认后再建立受管区块。');
+  }
+  return blocked.length > 0;
+}
 
 /** skip: { <skill 名>: '跳过原因' } —— 命中的 skill 不装,并清掉该位置的历史遗留副本。 */
 function installAsSkills(label, base, skip = {}) {
@@ -235,19 +328,19 @@ function installAsCursor(base) {
 
 // ── 逐工具探测 + 安装 ─────────────────────────────────────────────────────────
 // Claude Code(尊重 CLAUDE_CONFIG_DIR;Compass/企业版会把配置目录改到别处)
-if (wantTool('claude')) {
+if (EFF_SKILLS.length && wantTool('claude')) {
   const base = process.env.CLAUDE_CONFIG_DIR || join(HOME, '.claude');
   if (existsSync(base)) installAsSkills('Claude Code', base);
   else summary.push(`–  Claude Code 未发现 ${base},跳过`);
 }
 
 // Codex 的可复用个人 skill 统一由 ~/.agents/skills 管理；~/.codex 只用于探测 Codex 是否已安装。
-if (wantTool('codex')) {
+if (EFF_SKILLS.length && wantTool('codex')) {
   if (existsSync(join(HOME, '.codex')) || existsSync(join(HOME, '.agents'))) installAsSkills('Codex', join(HOME, '.agents'));
   else summary.push('–  Codex 未发现 ~/.codex 或 ~/.agents,跳过');
 }
 
-if (wantTool('cursor')) {
+if (EFF_SKILLS.length && wantTool('cursor')) {
   if (existsSync(join(HOME, '.cursor'))) installAsCursor(join(HOME, '.cursor'));
   else summary.push('–  Cursor 未发现 ~/.cursor,跳过');
 }
@@ -258,10 +351,25 @@ const OPENCLAW_SKIP = {
   'kala-gog': 'OpenClaw 已有同源的 gog skill',
   'kala-meeting-minutes': '依赖 kala-feishu,当前只部署到 Claude Code / Codex / Cursor',
 };
-if (wantTool('openclaw')) {
+if (EFF_SKILLS.length && wantTool('openclaw')) {
   const oc = [join(HOME, '.openclaw'), join(HOME, '.config', 'openclaw'), join(HOME, '.open-claw')].find(existsSync);
   if (oc) installAsSkills('OpenClaw', oc, OPENCLAW_SKIP);
   else summary.push('–  OpenClaw 未发现其配置目录,跳过(装好后重跑本脚本)');
+}
+
+// 对话规范是常驻用户指令,不是任务型 Skill。只写入官方支持的用户级入口。
+let dialogueBlocked = false;
+if (doDialogueStyle) {
+  const dialoguePlans = [];
+  if (wantTool('claude')) {
+    const claudeBase = process.env.CLAUDE_CONFIG_DIR || join(HOME, '.claude');
+    dialoguePlans.push(planManagedDialogueBlock('Claude Code 全局指令', join(claudeBase, 'CLAUDE.md')));
+  }
+  if (wantTool('codex')) {
+    const codexBase = process.env.CODEX_HOME || join(HOME, '.codex');
+    dialoguePlans.push(planManagedDialogueBlock('Codex 全局指令', join(codexBase, 'AGENTS.md')));
+  }
+  dialogueBlocked = applyDialoguePlans(dialoguePlans);
 }
 
 // ── 输出 ─────────────────────────────────────────────────────────────────────
@@ -277,3 +385,4 @@ if (dryRun) {
   console.log('装好新工具后,重跑安装器即可增量补齐。');
   console.log('提示:支持 --list 看选项 · --dry-run 只预览不落地 · 按 skill 名 / --tools 选择性安装(详见 --help 或 AGENTS.md)。');
 }
+if (!dryRun && dialogueBlocked) process.exitCode = 2;

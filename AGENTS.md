@@ -12,6 +12,8 @@
 2. 预览这次会做什么(不改动任何文件):`./install.sh --dry-run [参数]`
 3. 把预览结果给用户确认后,去掉 `--dry-run` 再真正安装。
 
+安装 `--dialogue-style` 时另加一道检查:若 Codex `~/.codex/AGENTS.md` 或 Claude Code `${CLAUDE_CONFIG_DIR:-~/.claude}/CLAUDE.md` 非空但没有完整的 Kala 受管标记,安装器会暂停且不修改文件。此时必须读取现有规则和 `global-instructions/dialogue-style.md`,按语义判断同义、互补和冲突项,把合并建议给用户确认后再手工建立受管区块；不得直接追加或覆盖。
+
 **跨平台**:真正的安装逻辑在 `install.mjs`(纯 Node,三平台通用);`install.sh` 只是 macOS/Linux 的薄封装。
 **Windows 上直接用 `node install.mjs [参数]`**,参数完全一致。改安装逻辑只改 `install.mjs`,别在 `.sh` 里另写一份。
 
