@@ -33,6 +33,17 @@
 - **装完要重启对应 CLI**:skill 在 CLI 启动时注册,重装后不重启看不到。
 - **加新 skill**:在 `skills/<名>/SKILL.md` 建好,并把名字加进 `install.mjs` 的 `SKILLS` 数组(`install.sh` 只是薄封装,不要在它里面另写一份)——**不是自动发现目录**。
 
+## 第三方库存 `third-party/`
+
+`third-party/_upstream/` 存放从开源仓库拉来的第三方 skill,是**库存和 diff 基准,不是部署源**。清单见 [third-party/INVENTORY.md](third-party/INVENTORY.md)。
+
+- **`install.mjs` 不碰这个目录**。库存里的 skill 不进 `SKILLS` 数组,装机时不会被自动安装。用户明确说要装某个第三方 skill 时才手工拷到目标位置,并当场告知这是库存取用、不受安装器管理。
+- **取用是拷贝,不是引用**:拷到目标项目的 `.claude/skills/` 或全局 `~/.claude/skills/`。全局取用要同步登记 `~/.claude/skills/_manifest.json`(`source: github` + `repo` / `upstream_path` / `installed_commit`)并重刷 `_index.md`,否则治理校验会报失效条目。
+- **⛔ 不要把库存目录放到任何 `.claude/` 路径下,也不要把 `.claude-plugin.disabled` 改回原名**。上游仓库自带 `plugin.json`,Claude Code 在扫描路径下遇到它会把整个目录当本地插件加载,导致同一批 skill 加载两次(顶层副本 + `<插件名>:<skill名>`),选错版本会拿到未定制的上游行为。这个坑 2026-08 已踩过一次,靠改名拆掉。
+- **有本地定制的 skill,权威副本不在库存里**。库存永远是上游原样快照。当前 `grilling` 有定制,权威版在 Trumen 项目的 `.claude/skills/grilling/`。上游若改了同一个 skill,**人工合并,不要用上游覆盖定制版**。
+- **更新库存**:临时 `git clone --depth 1` 一份新的做 `diff -rq`,确认后覆盖,并回写 `INVENTORY.md` 的 commit 和日期。库存目录本身没有 `.git`(故意删掉,避免嵌套仓库),不要在里面 `git pull`。
+- **不要改用 `npx skills` 管理**:落点与手工拷贝相同,但官方文档未说明 `update` 如何处理本地修改、无冲突检测,对有定制的 skill 有静默覆盖风险。
+
 ## kala-feishu 特有(若本次涉及)
 
 - 运行期数据在仓库外 `~/.kala/feishu/`(App 凭证 / OAuth token / 目标位置),**不进 git,不要提交**。
