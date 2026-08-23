@@ -27,6 +27,7 @@
 - **kala-feishu / kala-gog / kala-meeting-minutes 不装到 OpenClaw**:kala-feishu 和 kala-gog 在 OpenClaw 已有同源能力(自带 `feishu_doc/drive/wiki/perm` 工具;
   以及一个 openclaw-managed 的 `gog` skill),重复且会造成触发歧义;kala-meeting-minutes 依赖 kala-feishu,当前部署范围仅为 Claude Code / Codex / Cursor。安装器有 `OPENCLAW_SKIP` 表自动跳过——
   **不要绕过这个跳过手动塞进 OpenClaw**。新增同类 skill 时往那张表里加一条,附跳过原因。
+- **kala-english-mode 只装 Claude Code / Codex**:辅助英语学习模式(对话内开关 + 两段式输出),两端均已实测;Cursor / OpenClaw 的等效触发未验证,安装器由 `CURSOR_SKIP` / `OPENCLAW_SKIP` 表跳过并清理历史副本。要扩展到新工具,先手工拷贝按四场景验证(开启确认 / 中文教表达 / 英文纠错 / 连续技术任务不掉格式),通过后再从对应跳过表移除。
 - **Codex 的个人/可复用 skill 根目录是 `~/.agents/skills`**。`~/.codex/skills` 只作为系统或历史兼容目录,安装器不得向两处重复复制同名 skill。探测到 `~/.codex` 或 `~/.agents` 都说明 Codex 已安装,目标仍统一为 `~/.agents/skills`。
 - **install.sh 是覆盖式**:每个 skill 先 `rm -rf` 再 `cp`,会冲掉已装副本里的手改。装前务必 `--dry-run` 看清"新建 / 覆盖 / 跳过"。
 - **Cursor 是双轨的**:安装器按「该 skill 有没有 `scripts/` 目录」自动分流——带脚本的装进 `~/.cursor/skills/<名>/`(并登记 `_manifest.json` + 触发该目录自带的 `generate-index.ps1` 刷新 `_index.md`),纯文档的转成 `~/.cursor/commands/<名>.md`。**判断依据是目录里有没有 `scripts/`,不是硬编码 skill 名**,加新 skill 无需改这段逻辑。

@@ -24,7 +24,7 @@ import { execFileSync } from 'child_process';
 const KIT_DIR = dirname(fileURLToPath(import.meta.url));
 const SRC = join(KIT_DIR, 'skills');
 const DIALOGUE_STYLE = join(KIT_DIR, 'global-instructions', 'dialogue-style.md');
-const SKILLS = ['kala-handoff', 'kala-resume', 'kala-feishu', 'kala-gog', 'kala-meeting-minutes', 'kala-design-doc'];
+const SKILLS = ['kala-handoff', 'kala-resume', 'kala-feishu', 'kala-gog', 'kala-meeting-minutes', 'kala-design-doc', 'kala-english-mode'];
 const TOOLS_ALL = ['claude', 'codex', 'cursor', 'openclaw'];
 const HOME = process.env.KALA_SKILL_HOME || homedir();
 
@@ -280,12 +280,26 @@ function regenerateSkillIndex(skillsRoot) {
  *   带 scripts/ 的 skill → ~/.cursor/skills/<名>/(flat layout,按该目录的 _manifest/_index 约定登记)
  *   纯文档的 skill       → ~/.cursor/commands/<名>.md(自包含,供 / 斜杠命令主动调用)
  */
-function installAsCursor(base) {
+function installAsCursor(base, skip = {}) {
   const cmdDest = join(base, 'commands');
   const skillDest = join(base, 'skills');
-  const withScripts = EFF_SKILLS.filter(hasScripts);
-  const docOnly = EFF_SKILLS.filter(s => !hasScripts(s));
+  const eligible = EFF_SKILLS.filter(s => !skip[s]);
+  const skipped = EFF_SKILLS.filter(s => skip[s]);
+  const withScripts = eligible.filter(hasScripts);
+  const docOnly = eligible.filter(s => !hasScripts(s));
   let did = false;
+
+  if (skipped.length) {
+    summary.push(`  Cursor  →  ${base}`);
+    for (const s of skipped) {
+      did = true;
+      summary.push(`      - ${s} : 跳过(${skip[s]})`);
+      if (!dryRun) { // 清掉两条轨道的历史遗留(对齐 installAsSkills 的跳过行为)
+        rmSync(join(skillDest, s), { recursive: true, force: true });
+        rmSync(join(cmdDest, `${s}.md`), { force: true });
+      }
+    }
+  }
 
   if (withScripts.length) {
     summary.push(`  Cursor(skills)  →  ${skillDest}`);
@@ -340,8 +354,12 @@ if (EFF_SKILLS.length && wantTool('codex')) {
   else summary.push('–  Codex 未发现 ~/.codex 或 ~/.agents,跳过');
 }
 
+// Cursor 侧尚未验证等效触发的 skill,明确跳过(见 AGENTS.md 硬规则)
+const CURSOR_SKIP = {
+  'kala-english-mode': '等效触发未验证,当前只部署 Claude Code / Codex',
+};
 if (EFF_SKILLS.length && wantTool('cursor')) {
-  if (existsSync(join(HOME, '.cursor'))) installAsCursor(join(HOME, '.cursor'));
+  if (existsSync(join(HOME, '.cursor'))) installAsCursor(join(HOME, '.cursor'), CURSOR_SKIP);
   else summary.push('–  Cursor 未发现 ~/.cursor,跳过');
 }
 
@@ -350,6 +368,7 @@ const OPENCLAW_SKIP = {
   'kala-feishu': 'OpenClaw 自带飞书工具 feishu_doc/drive/wiki/perm',
   'kala-gog': 'OpenClaw 已有同源的 gog skill',
   'kala-meeting-minutes': '依赖 kala-feishu,当前只部署到 Claude Code / Codex / Cursor',
+  'kala-english-mode': '等效触发未验证,当前只部署 Claude Code / Codex',
 };
 if (EFF_SKILLS.length && wantTool('openclaw')) {
   const oc = [join(HOME, '.openclaw'), join(HOME, '.config', 'openclaw'), join(HOME, '.open-claw')].find(existsSync);

@@ -13,6 +13,7 @@
 | **kala-gog** | 用你本人的 Google 身份(OAuth)读写 Gmail / 日历 / Drive / Docs / Sheets / Contacts,覆盖个人号与 Garena 工作号两个账号。底层是本地 `gog` CLI。含从零部署引导(装 CLI → 配 OAuth 客户端 → 逐账号授权 → 冒烟)与 Windows 指南。 |
 | **kala-meeting-minutes** | 根据会议录音转录、白板和样例纪要生成证据可追溯、范围准确、视觉可验收的会议纪要。发布到飞书时依赖 kala-feishu；无飞书能力时生成可换设备继续发布的本地纪要包。 |
 | **kala-design-doc** | 创建、编辑、改写或审核中文功能设计文档。用语义底账防止措辞优化改变原意，并检查职责越界、语义重复、抽象术语、无效举例和不必要的技术细节。 |
+| **kala-english-mode** | 辅助英语学习模式:对话内开关(自然语言或 `/kala-english-mode`)。开启后每条回复两段式——先给英语表达反馈(中文输入→教地道说法,英文输入→纠错),再正常回答;基础档【回答】为英文 TL;DR + 中文详解,挑战档全英文。仅当前对话生效,新 session 需重开。 |
 
 仓库还维护一份不属于 Skill 的[全局对话表达规范](global-instructions/dialogue-style.md)。它负责日常问答的直答、非技术表达和信息密度；`kala-design-doc` 只在实际创建、修改或审核设计文档时运行。
 
@@ -23,6 +24,8 @@
 > **kala-gog 说明**:它是**纯文档 skill**(无 `scripts/`),能力来自宿主机上的 [gogcli](https://github.com/openclaw/gogcli)——二进制命令名是 **`gog`**,不是 `gogcli`。所以"部署"= 装 CLI + 配 OAuth 客户端 + 逐账号授权,**凭证与 token 存进系统密钥链(macOS Keychain / Windows 凭据管理器),不进 git、不跨设备迁移**,换机重新授权一遍即可。账号名册见 [accounts.json](skills/kala-gog/references/accounts.json)。Claude Code / Codex / Cursor 三端可用(OpenClaw 侧已有同源的 `gog` skill,明确跳过)。
 
 > **kala-meeting-minutes 说明**:它带 `scripts/`、`references/` 和 `assets/`,在三端都安装为真正的 skill 目录。飞书读取、账号路由、图片、画板和文档块操作统一复用 kala-feishu,不另存凭证。没有飞书能力时,默认在当前项目 `.meeting-minutes/<日期>-<主题>/` 生成正文、证据映射、HTML 预览、视觉资产、发布计划和 QA 报告;不在项目中时使用 `~/Documents/Kala/MeetingMinutes/`。当前不装到 OpenClaw。
+
+> **kala-english-mode 说明**:纯文档 skill(无 `scripts/`),零部署依赖。当前只装 Claude Code / Codex(两端已实测);Cursor / OpenClaw 的等效触发未验证,安装器自动跳过。Codex 侧没有斜杠命令,用 `$` 提及或自然语言(「打开英语学习模式」)开启。
 
 ## 安装
 
