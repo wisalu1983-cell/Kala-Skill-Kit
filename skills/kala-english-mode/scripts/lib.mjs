@@ -72,9 +72,16 @@ export function getOrInitState(sessionId) {
 
 const HAN_RE = /[一-鿿]/;
 
-// 剥离代码块（```...```）和行内代码（`...`），只留自然语言部分再判断。
+// 剥离代码块（```...```）、行内代码（`...`）和引用块（以 > 开头的行），只留自然语言部分再判断。
+// 引用块要排除是因为客户端"引用回复"会把助手上一条消息（可能含中文）整段带回来，
+// 那不是用户这次自己打的话，不该触发中文反馈判断。
 export function stripCodeAndQuotes(text) {
-  return text.replace(/```[\s\S]*?```/g, ' ').replace(/`[^`]*`/g, ' ');
+  return text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+    .split('\n')
+    .filter((line) => !/^\s*>/.test(line))
+    .join('\n');
 }
 
 export function hasChineseNaturalLanguage(promptText) {
@@ -108,9 +115,14 @@ export function detectToggle(promptText) {
 }
 
 export function buildReminder(state, promptText) {
+  const isChallenge = state.tier === 'challenge';
+  const answerContract = isChallenge
+    ? '【回答】区块必须全部用英语写，不夹杂中文，不需要单独摘要。'
+    : '【回答】区块必须先写 1-2 句自然英语概括本条回答要点（不要求带"TL;DR"这种字面标签，只要是英文句子即可），空一行，再写完整的中文回答——不能跳过这句英文摘要、直接进中文。';
   const lines = [
-    `[kala-english-mode 机械提醒] 模式：开启，档位：${state.tier === 'challenge' ? '挑战档' : '基础档'}。`,
+    `[kala-english-mode 机械提醒] 模式：开启，档位：${isChallenge ? '挑战档' : '基础档'}。`,
     '本条回复必须严格分两段输出：先【English Coach】区块给英语表达反馈，再【回答】区块正常作答。',
+    answerContract,
   ];
   if (hasChineseNaturalLanguage(promptText)) {
     lines.push(
