@@ -53,6 +53,12 @@
 - 运行期数据在仓库外 `~/.kala/feishu/`(App 凭证 / OAuth token / 目标位置),**不进 git,不要提交**。
 - 每台设备首次用需部署一次:写 App 凭证 + 浏览器 OAuth 授权一次。`skills/kala-feishu/SKILL.md` 有从零引导,细节见 `skills/kala-feishu/references/setup-guide.md`。
 - **在 Windows 上部署**:先读 `skills/kala-feishu/references/windows-setup.md`(平台差异只有三处:安装器入口 `node install.mjs`、路径/环境变量写法、保活改用**任务计划程序**而非 launchd)。脚本本体跨平台,能力与 macOS 等价。
+- **改已有文档默认走增量更新**:`write-md-to-feishu.mjs ... --patch`(先 `--dry-run` 看计划,有删除/替换要 `--yes`)。
+  默认的全量重写是「清空 + 重建」,小改也会冲掉别人的编辑、废掉块上的局部评论。差异计算在 `scripts/feishu-doc-patch.mjs`,
+  只在顶层块对齐;图片按位置视为未变(要重传加 `--force-images`);画板/电子表格这类 Markdown 生成不出来的块默认进删除清单,
+  **带画板的文档要加 `--keep-foreign` 把它们原地留住**,执行前必须让用户确认。
+  各边界的实际行为跑 `node scripts/patch-demo.mjs` 就能看(离线)。
+  改了这个模块先跑 `node scripts/patch-selftest.mjs`(离线),再 `node scripts/selftest.mjs --only P13`(真实 API)。
 - 部分步骤(建飞书应用、点浏览器授权、后台审权限)**只能用户本人做**,agent 只能给指引并等待。
 - **多账号 / 多租户(自动路由)**:一个飞书 App(= 一个租户)对应一个账号。**传飞书 URL 的读写(`feishu-wiki resolve`、`write-md-to-feishu`)会按 URL 域名自动选对账号**(探测一次后记进 `~/.kala/feishu/routing.json`,下次直接命中),**通常无需手动指定**。显式设 `KALA_FEISHU_ACCOUNT=<名>` 会优先覆盖。查看账号与已学路由:`node scripts/feishu-route.mjs --list`。报 `131006 permission denied` = 该身份对该文档确实没权限(不是 token 坏)。注:非 URL 的操作(如按 `space_id` / `folder_token` 的 drive/wiki 命令)不带域名信息,跨租户时仍需显式设 `KALA_FEISHU_ACCOUNT`。
 - **token 保活**:跑一次 `node scripts/setup-keepalive.mjs` 注册系统定时器(macOS→launchd,Windows→任务计划程序),每 7 天跑 `keepalive.mjs` 遍历所有账号逐个 refresh;**不要**让定时任务直接跑 `feishu-oauth.mjs refresh`——那只刷默认账号(`personal`)一个,别的会闲置过期。

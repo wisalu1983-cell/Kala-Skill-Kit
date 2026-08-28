@@ -13,9 +13,9 @@
  *
  * 阶段:P0 部署 · P1/P2 云盘文档 · P3/P4 知识库 · P5 token/错误码 · P6 评论
  *      P7 电子表格 · P8 多维表格 · P9 CLI 契约与删除门槛 · P10 体积保护/分批/URL 解析
- *      P11 网络重试策略 · P12 画板(board)
+ *      P11 网络重试策略 · P12 画板(board) · P13 增量更新(patch) · P14 读取全文(read→Markdown)
  *
- * 退出码:所有「必需」用例(P0–P2、P5–P12)通过 = 0;有必需用例 FAIL = 1。
+ * 退出码:所有「必需」用例(P0–P2、P5–P14)通过 = 0;有必需用例 FAIL = 1。
  *        知识库用例(P3–P4)在本机无 wiki 条件时记为 SKIP,不影响退出码。
  */
 import { writeFileSync, unlinkSync, readFileSync, existsSync } from 'fs';
@@ -188,7 +188,7 @@ async function main() {
   // ── P3/P4 知识库(条件门)────────────────────────────────────
   let spaceId, wikiNodeToken, wikiObjToken;
   // --only 指向别的阶段时不必探测 wiki(省一次请求,也避免无关的 SKIP 混进汇总)
-  let wikiAvailable = wanted('P3') || wanted('P4');
+  let wikiAvailable = wanted('P3') || wanted('P4') || wanted('P14');
   if (wikiAvailable) {
     try {
       const sp = await api('GET', '/wiki/v2/spaces', { query: { page_size: '10' } });
@@ -988,6 +988,311 @@ async function main() {
     if (!/用法/.test(bad.stdout + bad.stderr)) throw new Error('未知命令应打印用法');
     return 'insert/nodes/shapes/未知命令 都符合契约';
   });
+
+  // ── P13 增量更新(patch)────────────────────────────────────
+  // 离线的差异计算/下标数学在 patch-selftest.mjs 里跑;这里只验真实 API 上的行为。
+  const PATCH_BASE = `# 增量更新自检
+
+第一段,待会儿只改这一段。
+
+## 小节
+
+- 项一
+- 项二
+
+结尾段。
+`;
+  let patchDoc0;
+  await run('P13.1', 'patch·只改一段,其余块 block_id 不变', async () => {
+    const { patchDoc } = await import('./feishu-doc-patch.mjs');
+    const d = await w.create('kala 自检-P13', containerToken);
+    patchDoc0 = d.document_id;
+    cleanup.push({ kind: 'file', token: patchDoc0, type: 'docx', desc: 'P13 文档' });
+    await w.write(patchDoc0, PATCH_BASE);
+
+    const before = (await w.read(patchDoc0)).blocks
+      .filter(b => b.parent_id === patchDoc0)
+      .map(b => b.block_id);
+    const r = await patchDoc(w, patchDoc0, PATCH_BASE.replace('第一段,待会儿只改这一段。', '第一段已经改掉了。'));
+    if (r.plan.stats.update !== 1) throw new Error(`应只有 1 处原地改,实际 ${JSON.stringify(r.plan.stats)}`);
+    if (r.done.fallback) throw new Error('update_text_elements 走了退回替换,说明接口没吃这种块');
+
+    const after = (await w.read(patchDoc0)).blocks.filter(b => b.parent_id === patchDoc0);
+    if (after.length !== before.length) throw new Error(`块数变了: ${before.length}→${after.length}`);
+    const ids = after.map(b => b.block_id);
+    if (JSON.stringify(ids) !== JSON.stringify(before)) throw new Error('block_id 序列变了,说明不是原地改');
+    const txt = after.map(b => (b.text?.elements || []).map(e => e.text_run?.content || '').join('')).join('|');
+    if (!txt.includes('第一段已经改掉了。')) throw new Error(`新文字没写进去: ${txt.slice(0, 120)}`);
+    return `${before.length} 块,原地改 1 块,id 全部保持`;
+  });
+
+  await run('P13.2', 'patch·中间插入 + 删除后顺序正确', async () => {
+    const { patchDoc } = await import('./feishu-doc-patch.mjs');
+    const target = PATCH_BASE
+      .replace('第一段,待会儿只改这一段。', '第一段,待会儿只改这一段。\n\n新插进来的一段。')
+      .replace('- 项二\n', '')
+      .replace('结尾段。', '结尾段。\n\n补在最后的一段。');
+    const r = await patchDoc(w, patchDoc0, target);
+    if (r.plan.stats.insert !== 2 || r.plan.stats.delete !== 1) {
+      throw new Error(`计划不对: ${JSON.stringify(r.plan.stats)}`);
+    }
+    const { unitsFromDoc, unitsFromMarkdown } = await import('./feishu-doc-patch.mjs');
+    const got = unitsFromDoc((await w.read(patchDoc0)).blocks, patchDoc0).map(u => u.preview);
+    const want = unitsFromMarkdown(target).map(u => u.preview);
+    if (JSON.stringify(got) !== JSON.stringify(want)) {
+      throw new Error(`顺序/内容对不上\n  got : ${JSON.stringify(got)}\n  want: ${JSON.stringify(want)}`);
+    }
+    return `插 2 删 1,块序列与目标一致(${got.length} 块)`;
+  });
+
+  await run('P13.3', 'patch·内容一致时零操作', async () => {
+    const { patchDoc, unitsFromDoc } = await import('./feishu-doc-patch.mjs');
+    const current = unitsFromDoc((await w.read(patchDoc0)).blocks, patchDoc0);
+    // 用文档当前内容反推的 Markdown 不好造,这里直接重跑上一轮的目标内容
+    const target = PATCH_BASE
+      .replace('第一段,待会儿只改这一段。', '第一段,待会儿只改这一段。\n\n新插进来的一段。')
+      .replace('- 项二\n', '')
+      .replace('结尾段。', '结尾段。\n\n补在最后的一段。');
+    const r = await patchDoc(w, patchDoc0, target, { dryRun: true });
+    const s = r.plan.stats;
+    if (s.update + s.replace + s.insert + s.delete !== 0) {
+      throw new Error(`应该零操作,实际 ${JSON.stringify(s)}(现有 ${current.length} 块)`);
+    }
+    return `${s.keep} 块全部保留,零改动`;
+  });
+
+  await run('P13.4', 'patch·CLI 契约(--dry-run 不改文档 / 有删除缺 --yes 拒绝)', async () => {
+    const md = join(tmpdir(), `kala_patch_${TS}.md`);
+    writeFileSync(md, '# 只剩一句\n\n别的都删掉。\n');
+    try {
+      const before = (await w.read(patchDoc0)).blocks.length;
+      const dry = runCli('write-md-to-feishu.mjs', [patchDoc0, md, '--patch', '--dry-run']);
+      if (dry.code !== 0) throw new Error(`--dry-run 应成功,实际 code=${dry.code} ${dry.stderr.slice(0, 160)}`);
+      if (!/计划:/.test(dry.stdout)) throw new Error('--dry-run 没打印计划');
+      if ((await w.read(patchDoc0)).blocks.length !== before) throw new Error('--dry-run 竟然改了文档');
+
+      const no = runCli('write-md-to-feishu.mjs', [patchDoc0, md, '--patch']);
+      if (no.code === 0) throw new Error('有删除却在缺 --yes 时执行了');
+      if (!/--yes/.test(no.stdout + no.stderr)) throw new Error('拒绝时应提示需要 --yes');
+      if ((await w.read(patchDoc0)).blocks.length !== before) throw new Error('拒绝执行却改了文档');
+
+      const yes = runCli('write-md-to-feishu.mjs', [patchDoc0, md, '--patch', '--yes']);
+      if (yes.code !== 0) throw new Error(`带 --yes 应成功,实际 code=${yes.code} ${yes.stderr.slice(0, 160)}`);
+      const after = (await w.read(patchDoc0)).blocks.filter(b => b.parent_id === patchDoc0);
+      if (after.length !== 2) throw new Error(`应只剩 2 块,实际 ${after.length}`);
+      return 'dry-run 只读 / 缺 --yes 拒绝 / 带 --yes 执行';
+    } finally {
+      try { unlinkSync(md); } catch { /* 临时文件 */ }
+    }
+  });
+
+  // ── P14 读取全文(read → Markdown)────────────────────────────
+  const READ_MD = `# 读取自检
+
+普通段落里有**粗体**、*斜体*、~~删除线~~、\`inline code\`,还有[链接](https://feishu.cn)。
+
+## 二级标题
+
+- 无序一
+  - 嵌套子项
+1. 有序一
+2. 有序二
+
+> 单行引用
+
+>>>
+容器引用第一行
+容器引用第二行
+>>>
+
+\`\`\`python
+print("hi")
+\`\`\`
+
+---
+
+| 列A | 列B |
+|------|------|
+| 1 | 2 |
+`;
+  let readDocToken;
+  await run('P14.1', 'read·全元素渲染成 Markdown', async () => {
+    const d = await w.create('kala 自检-P14', containerToken);
+    readDocToken = d.document_id;
+    cleanup.push({ kind: 'file', token: readDocToken, type: 'docx', desc: 'P14 文档' });
+    await w.write(readDocToken, READ_MD);
+
+    const { markdown } = await w.readMarkdown(readDocToken);
+    const need = [
+      ['# 读取自检', '一级标题'],
+      ['**粗体**', '粗体'],
+      ['*斜体*', '斜体'],
+      ['~~删除线~~', '删除线'],
+      ['`inline code`', 'inline code'],
+      ['[链接](https://feishu.cn)', '链接'],
+      ['## 二级标题', '二级标题'],
+      ['- 无序一', '无序列表'],
+      ['  - 嵌套子项', '嵌套列表缩进'],
+      ['1. 有序一', '有序列表起始'],
+      ['2. 有序二', '有序列表递增'],
+      ['> 单行引用', '单行引用'],
+      ['> 容器引用第一行', '容器引用第一行'],
+      ['> 容器引用第二行', '容器引用第二行'],
+      ['```py', '代码块语言还原'], // LANG_ENUM 里 py/python 同枚举值,取第一个别名 py
+      ['print("hi")', '代码内容'],
+      ['---', '分割线'],
+      ['| 1 | 2 |', '表格内容'],
+    ];
+    const missing = need.filter(([frag]) => !markdown.includes(frag)).map(([, name]) => name);
+    if (missing.length) throw new Error(`Markdown 缺失: ${missing.join('、')}\n---\n${markdown}`);
+    return `${markdown.split('\n').length} 行,结构齐全`;
+  });
+
+  await run('P14.2', 'read·画板等不可转换块渲染占位,不报错', async () => {
+    const B = await import('./feishu-board.mjs');
+    await B.insertBoard(readDocToken);
+    const { markdown } = await w.readMarkdown(readDocToken);
+    if (!/画板.*本渲染器暂不支持/.test(markdown)) throw new Error(`未见画板占位提示\n---\n${markdown.slice(-300)}`);
+    return '画板占位提示已出现';
+  }, { required: false }); // 依赖 board:whiteboard 权限,未开通时记 SKIP
+
+  await run('P14.3', 'read·CLI 支持传 URL,输出到 stdout', async () => {
+    const url = `https://example.feishu.cn/docx/${readDocToken}`;
+    const { code, stdout, stderr } = runCli('feishu-doc-read.mjs', [url]);
+    if (code !== 0) throw new Error(`退出码 ${code}: ${stderr.slice(0, 200)}`);
+    if (!stdout.includes('# 读取自检')) throw new Error(`stdout 里没有渲染出的正文\n---\n${stdout.slice(0, 200)}`);
+    return 'URL 解析 + stdout 输出正常';
+  });
+
+  await run('P14.4', 'read·CLI --out 存文件', async () => {
+    const out = join(tmpdir(), `kala-read-${TS}.md`);
+    try {
+      const { code, stdout } = runCli('feishu-doc-read.mjs', [readDocToken, '--out', out]);
+      if (code !== 0) throw new Error(`退出码 ${code}`);
+      if (stdout.includes('# 读取自检')) throw new Error('--out 模式不该把正文打进 stdout');
+      if (!existsSync(out)) throw new Error('没生成导出文件');
+      const saved = readFileSync(out, 'utf8');
+      if (!saved.includes('# 读取自检')) throw new Error('导出文件内容不对');
+      return `已存并校验: ${out}`;
+    } finally {
+      try { unlinkSync(out); } catch { /* 临时文件 */ }
+    }
+  });
+
+  await run('P14.5', 'read·电子表格分发(--type)+ 默认空网格裁剪', async () => {
+    const S = await import('./feishu-sheets.mjs');
+    const ss = await S.createSpreadsheet(`kala 自检-P14-sheet-${TS}`, containerToken);
+    cleanup.push({ kind: 'file', token: ss.spreadsheet_token, type: 'sheet', desc: 'P14 电子表格' });
+    const sheets = await S.listSheets(ss.spreadsheet_token);
+    await S.writeRange(ss.spreadsheet_token, `${sheets[0].sheet_id}!A1:B2`, [['名字', '数值'], ['A', 1]]);
+
+    const { code, stdout, stderr } = runCli('feishu-doc-read.mjs', [ss.spreadsheet_token, '--type', 'sheet']);
+    if (code !== 0) throw new Error(`退出码 ${code}: ${stderr.slice(0, 200)}`);
+    if (!stdout.includes('| 名字 | 数值 |')) throw new Error(`没读到表头\n---\n${stdout}`);
+    if (!/\|\s*A\s*\|\s*1\s*\|/.test(stdout)) throw new Error(`没读到数据行\n---\n${stdout}`);
+    const lineCount = stdout.trim().split('\n').length;
+    if (lineCount > 10) throw new Error(`输出行数异常多(${lineCount}),疑似新建表格自带的空白网格没被裁剪掉\n---\n${stdout.slice(0, 300)}`);
+    return `裸 token + --type sheet,表头/数据齐全,${lineCount} 行(空网格已裁剪)`;
+  });
+
+  await run('P14.6', 'read·多维表格分发(--type)+ 默认空字段/空记录裁剪', async () => {
+    const B = await import('./feishu-bitable.mjs');
+    const base = await B.createBase(`kala 自检-P14-base-${TS}`, containerToken);
+    cleanup.push({ kind: 'file', token: base.app_token, type: 'bitable', desc: 'P14 多维表格' });
+    const t = (await B.listTables(base.app_token))[0];
+    await B.addField(base.app_token, t.table_id, '数值', '数字');
+    await B.addField(base.app_token, t.table_id, '完成日期', '日期'); // 新建表自带一个默认「日期」字段,同名会冲突,这里换个名字
+    // 2025-01-01T00:00:00Z 的毫秒时间戳——日期字段的值就是这种格式,不认字段类型只会原样打印这串数字
+    await B.addRecords(base.app_token, t.table_id, [{ 文本: '第一条', 数值: 10, 完成日期: 1735689600000 }]);
+
+    const { code, stdout, stderr } = runCli('feishu-doc-read.mjs', [base.app_token, '--type', 'bitable']);
+    if (code !== 0) throw new Error(`退出码 ${code}: ${stderr.slice(0, 200)}`);
+    if (!stdout.includes('文本') || !stdout.includes('数值')) throw new Error(`表头缺失\n---\n${stdout}`);
+    if (!stdout.includes('第一条')) throw new Error(`数据缺失\n---\n${stdout}`);
+    if (!stdout.includes('2025-01-01')) throw new Error(`日期字段没有被识别并转成可读日期(应显示 2025-01-01,不是原始毫秒时间戳)\n---\n${stdout}`);
+    if (stdout.includes('1735689600000')) throw new Error(`日期字段仍在打印原始毫秒时间戳\n---\n${stdout}`);
+    if (stdout.includes('单选') || stdout.includes('附件')) throw new Error(`飞书新建表自带的默认空字段没被裁剪掉\n---\n${stdout}`);
+    const lineCount = stdout.trim().split('\n').length;
+    if (lineCount > 10) throw new Error(`输出行数异常多(${lineCount}),疑似默认空白模板记录没被裁剪掉\n---\n${stdout.slice(0, 300)}`);
+    return `裸 token + --type bitable,数据齐全,日期字段正确转成可读格式,默认空字段/空记录已裁剪`;
+  });
+
+  await run('P14.8', 'read·docx 嵌入多维表格/电子表格块展开(resolveEmbed)', async () => {
+    const { resolveEmbeddedBlock, splitCompositeToken } = await import('./feishu-doc-read.mjs');
+
+    // 拆分逻辑先验一遍,这是后续两步的地基
+    const p1 = splitCompositeToken('appTokenXXX_tblYYY');
+    if (!p1 || p1.main !== 'appTokenXXX' || p1.sub !== 'tblYYY') throw new Error(`token 拆分不对: ${JSON.stringify(p1)}`);
+
+    const B = await import('./feishu-bitable.mjs');
+    const base = await B.createBase(`kala 自检-P14-embed-base-${TS}`, containerToken);
+    cleanup.push({ kind: 'file', token: base.app_token, type: 'bitable', desc: 'P14 嵌入测试多维表格' });
+    const t = (await B.listTables(base.app_token))[0];
+    await B.addField(base.app_token, t.table_id, '数值', '数字');
+    await B.addRecords(base.app_token, t.table_id, [{ 文本: '嵌入可读', 数值: 42 }]);
+
+    const bitableMd = await resolveEmbeddedBlock({ block_type: 18, bitable: { token: `${base.app_token}_${t.table_id}` } });
+    if (!bitableMd || !bitableMd.includes('嵌入可读')) throw new Error(`多维表格嵌入块展开失败\n---\n${bitableMd}`);
+
+    const S = await import('./feishu-sheets.mjs');
+    const ss = await S.createSpreadsheet(`kala 自检-P14-embed-sheet-${TS}`, containerToken);
+    cleanup.push({ kind: 'file', token: ss.spreadsheet_token, type: 'sheet', desc: 'P14 嵌入测试电子表格' });
+    const sheets = await S.listSheets(ss.spreadsheet_token);
+    await S.writeRange(ss.spreadsheet_token, `${sheets[0].sheet_id}!A1:A1`, [['嵌入表格可读']]);
+
+    const sheetMd = await resolveEmbeddedBlock({ block_type: 30, sheet: { token: `${ss.spreadsheet_token}_${sheets[0].sheet_id}` } });
+    if (!sheetMd || !sheetMd.includes('嵌入表格可读')) throw new Error(`电子表格嵌入块展开失败\n---\n${sheetMd}`);
+
+    // 端到端:构造一个假 blocks 数组,验证 blocksToMarkdown 真的会调用 resolveEmbed 并把结果拼进正文
+    // (不只测 resolveEmbeddedBlock 本身,而是测它在渲染管线里真的被接上了)
+    const { blocksToMarkdown } = await import('./feishu-doc-writer.mjs');
+    const fakeRoot = 'fakeRootToken';
+    const fakeBlocks = [
+      { block_id: fakeRoot, block_type: 1, parent_id: '', children: ['b1', 'b2'] },
+      { block_id: 'b1', block_type: 2, parent_id: fakeRoot, text: { elements: [{ text_run: { content: '前面一段' } }] } },
+      { block_id: 'b2', block_type: 18, parent_id: fakeRoot, bitable: { token: `${base.app_token}_${t.table_id}` } },
+    ];
+    const full = await blocksToMarkdown(fakeBlocks, fakeRoot, { resolveEmbed: resolveEmbeddedBlock });
+    if (!full.includes('前面一段') || !full.includes('嵌入可读')) throw new Error(`blocksToMarkdown 没能通过 resolveEmbed 展开嵌入块\n---\n${full}`);
+
+    // 不传 resolveEmbed 时应退回占位提示,不报错、不静默丢失该块
+    const fallback = await blocksToMarkdown(fakeBlocks, fakeRoot);
+    if (!/多维表格.*本渲染器暂不支持/.test(fallback)) throw new Error(`不传 resolveEmbed 时占位提示没出现\n---\n${fallback}`);
+
+    return '拆分 token / 多维表格展开 / 电子表格展开 / 端到端接线 / 无 resolver 时占位回退,全部通过';
+  });
+
+  if (wikiAvailable) {
+    await run('P14.7', 'read·知识库节点自动按底层类型分发', async () => {
+      const S = await import('./feishu-sheets.mjs');
+      const ss = await S.createSpreadsheet(`kala 自检-P14-wiki-${TS}`, containerToken);
+      // 移入知识库后底层对象还是同一个 spreadsheet_token,清理时照常按 sheet 类型删 drive 文件即可
+      cleanup.push({ kind: 'file', token: ss.spreadsheet_token, type: 'sheet', desc: 'P14 wiki 分发电子表格' });
+      const sheets = await S.listSheets(ss.spreadsheet_token);
+      await S.writeRange(ss.spreadsheet_token, `${sheets[0].sheet_id}!A1:A1`, [['wiki分发可读']]);
+
+      const moved = await api('POST', `/wiki/v2/spaces/${spaceId}/nodes/move_docs_to_wiki`, {
+        body: { obj_type: 'sheet', obj_token: ss.spreadsheet_token },
+      });
+      const taskId = moved.task_id;
+      // move_docs_to_wiki 是异步任务,节点树要等它跑完才会出现;轮询而不是固定 sleep,最多等 10 次。
+      let nodeToken;
+      for (let i = 0; i < 10 && !nodeToken; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const nodes = await api('GET', `/wiki/v2/spaces/${spaceId}/nodes`, { query: { page_size: '50' } });
+        const hit = (nodes.items || []).find((n) => n.obj_token === ss.spreadsheet_token);
+        if (hit) nodeToken = hit.node_token;
+      }
+      if (!nodeToken) throw new Error(`move_docs_to_wiki 后 ${taskId ? `(task ${taskId}) ` : ''}没能在节点树里找到对应节点`);
+
+      // runCli 成功时不回传子进程 stderr(和 P10.5 等其它用例一致的约定),只能靠 stdout 断言:
+      // 分发到了错误的类型(比如误当成 docx)要么会直接报错、要么读不出这行 sheet 内容。
+      const { code, stdout, stderr } = runCli('feishu-doc-read.mjs', [`https://x.feishu.cn/wiki/${nodeToken}`]);
+      if (code !== 0) throw new Error(`退出码 ${code}: ${stderr.slice(0, 200)}`);
+      if (!stdout.includes('wiki分发可读')) throw new Error(`没读到底层电子表格内容(疑似分发到了错误类型)\n---\n${stdout}`);
+      return `wiki 节点 → sheet ${ss.spreadsheet_token},内容正确`;
+    }, { required: false });
+  }
 
   // ── P5 token / 错误码 ────────────────────────────────────────
   await run('P5.1', 'token·强制刷新', async () => {

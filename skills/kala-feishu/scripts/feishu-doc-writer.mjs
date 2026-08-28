@@ -23,7 +23,7 @@ import { execFileSync } from 'child_process';
 import { loadAppCredentials, tokenFile, FEISHU_BASE } from './feishu-config.mjs';
 
 // ─── Block Type 常量 ─────────────────────────────────────────────────────────
-const BT = {
+export const BT = {
   Page: 1,
   Text: 2,
   Heading1: 3,
@@ -54,7 +54,7 @@ const MAX_COLUMN_WIDTH = 480;
 const MAX_CELLS = 499; // Descendant API 上限 1000 blocks，cells*2+1 ≤ 999 → cells ≤ 499
 
 // block_type → 字段名映射
-const BT_KEY = {
+export const BT_KEY = {
   [BT.Text]: 'text',
   [BT.Heading1]: 'heading1',
   [BT.Heading2]: 'heading2',
@@ -143,7 +143,7 @@ function textRun(content, style = {}) {
  * 解析行内 markdown 样式，返回 elements 数组
  * 支持：**bold** *italic* ~~strike~~ `code` [text](url)
  */
-function parseInline(text) {
+export function parseInline(text) {
   const elements = [];
   const re = /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
   let last = 0;
@@ -651,6 +651,197 @@ export function markdownToBlocks(markdown) {
   return blocks;
 }
 
+// ─── Blocks → Markdown 转换(read 用，markdownToBlocks 的反向)────────────────
+// 目标是「读得懂」，不是逐字节可逆：尽力还原结构，飞书里生成不出对应 Markdown 的块
+// (画板/嵌入电子表格/高亮块/分栏……)不静默丢弃，落一行占位提示。
+
+const READ_TYPE_NAME = {
+  [BT.Text]: '段落', [BT.BulletItem]: '无序列表项', [BT.OrderedItem]: '有序列表项',
+  [BT.Code]: '代码块', [BT.Quote]: '引用', [BT.Divider]: '分割线', [BT.Image]: '图片',
+  [BT.Table]: '表格', [BT.TableCell]: '表格单元格', [BT.QuoteContainer]: '引用块',
+  18: '多维表格', 30: '电子表格', 43: '画板',
+};
+
+const LANG_NAME = (() => {
+  const rev = {};
+  for (const [name, id] of Object.entries(LANG_ENUM)) if (!(id in rev)) rev[id] = name;
+  return rev;
+})();
+
+function styleWrap(text, style = {}) {
+  if (!text) return text;
+  if (style.inline_code) return '`' + text + '`'; // code span 内部不叠加其他样式标记
+  let t = text;
+  if (style.bold) t = `**${t}**`;
+  if (style.italic) t = `*${t}*`;
+  if (style.strikethrough) t = `~~${t}~~`;
+  if (style.link?.url) {
+    let url = style.link.url;
+    try { url = decodeURIComponent(url); } catch { /* 保留原样 */ }
+    t = `[${t}](${url})`;
+  }
+  return t;
+}
+
+/** 行内 elements → Markdown 文本。未知元素类型给占位提示，不抛错、不假装是空字符串。 */
+export function elementsToMarkdown(elements = []) {
+  return (elements || []).map((el) => {
+    try {
+      if (el?.text_run) return styleWrap(el.text_run.content ?? '', el.text_run.text_element_style || {});
+      if (el?.mention_user) return `@${el.mention_user.name || el.mention_user.user_id || '用户'}`;
+      if (el?.mention_doc) return `[${el.mention_doc.title || '关联文档'}](${el.mention_doc.url || ''})`;
+      if (el?.equation) return `\`${el.equation.content || ''}\``;
+    } catch { /* 落到下面的占位提示 */ }
+    return el ? '[不支持渲染的行内元素]' : '';
+  }).join('');
+}
+
+function plainTextOf(elements) {
+  return (elements || []).map((e) => e?.text_run?.content ?? '').join('');
+}
+
+/**
+ * blocks(FeishuDocWriter#read 返回的 blocks)→ 可读 Markdown 全文。
+ * @param {object[]} blocks - _listBlocks 的原始结果
+ * @param {string} rootId - 文档 token(即 Page 块 id)
+ * @param {object} [opts]
+ * @param {(block:object)=>Promise<string|null>} [opts.resolveEmbed] - 遇到生成不出 Markdown 的
+ *   块(嵌入多维表格 18/嵌入电子表格 30/画板 43……)时调用,返回一段替代文本就地嵌入;
+ *   返回 null/抛错则退回占位提示。不传就是原来的行为——全部占位。
+ * @param {(fileToken:string, block:object)=>Promise<string|null>} [opts.downloadImage] - 遇到
+ *   图片块时调用,返回本地文件路径就用它渲染 `![图片](路径)`;返回 null/抛错则退回占位提示。
+ */
+export async function blocksToMarkdown(blocks, rootId, opts = {}) {
+  const { resolveEmbed, downloadImage } = opts;
+  const byId = Object.create(null);
+  for (const b of blocks) byId[b.block_id] = b;
+  const root = byId[rootId];
+  const topIds = root?.children?.length
+    ? root.children
+    : blocks.filter((b) => b.parent_id === rootId && b.block_type !== BT.Page).map((b) => b.block_id);
+
+  const out = [];
+
+  function cellText(cellBlock) {
+    const parts = (cellBlock.children || []).map((cid) => {
+      const cb = byId[cid];
+      if (!cb) return '';
+      const key = BT_KEY[cb.block_type];
+      return key ? elementsToMarkdown(cb[key]?.elements) : '';
+    }).filter(Boolean);
+    return parts.join('<br>').replace(/\|/g, '\\|') || ' ';
+  }
+
+  function renderTable(b, pad) {
+    const prop = b.table?.property || {};
+    const cols = prop.column_size || 0;
+    const rows = prop.row_size || 0;
+    const cellIds = b.children || [];
+    if (!cols || !rows || !cellIds.length) { out.push(pad + '(空表格)', ''); return; }
+    const grid = [];
+    for (let r = 0; r < rows; r++) {
+      const row = [];
+      for (let c = 0; c < cols; c++) {
+        const cid = cellIds[r * cols + c];
+        const cb = cid ? byId[cid] : null;
+        row.push(cb ? cellText(cb) : ' ');
+      }
+      grid.push(row);
+    }
+    out.push(pad + '| ' + grid[0].join(' | ') + ' |');
+    out.push(pad + '|' + grid[0].map(() => ' --- ').join('|') + '|');
+    for (let r = 1; r < grid.length; r++) out.push(pad + '| ' + grid[r].join(' | ') + ' |');
+    out.push('');
+  }
+
+  async function renderBlock(b, indent, orderedN) {
+    const pad = '  '.repeat(indent);
+    const t = b.block_type;
+
+    if (t === BT.Text) {
+      const text = elementsToMarkdown(b.text?.elements);
+      out.push(text.trim() ? pad + text : '', '');
+      return;
+    }
+    if (t >= BT.Heading1 && t <= BT.Heading6) {
+      const hashes = '#'.repeat(t - BT.Heading1 + 1);
+      out.push(pad + `${hashes} ${elementsToMarkdown(b[BT_KEY[t]]?.elements)}`, '');
+      return;
+    }
+    if (t === BT.BulletItem || t === BT.OrderedItem) {
+      const text = elementsToMarkdown(b[BT_KEY[t]]?.elements);
+      const marker = t === BT.OrderedItem ? `${orderedN}.` : '-';
+      out.push(pad + `${marker} ${text}`);
+      if (b.children?.length) await renderChildren(b.children, indent + 1);
+      return;
+    }
+    if (t === BT.Quote) {
+      out.push(pad + `> ${elementsToMarkdown(b.quote?.elements)}`, '');
+      return;
+    }
+    if (t === BT.QuoteContainer) {
+      const lines = (b.children || []).map((cid) => byId[cid]).filter(Boolean)
+        .map((cb) => elementsToMarkdown(cb[BT_KEY[cb.block_type]]?.elements));
+      for (const line of lines) out.push(pad + `> ${line}`);
+      out.push('');
+      return;
+    }
+    if (t === BT.Code) {
+      const lang = LANG_NAME[b.code?.style?.language] || '';
+      const code = plainTextOf(b.code?.elements);
+      out.push(pad + '```' + (lang === 'plaintext' ? '' : lang));
+      for (const l of code.split('\n')) out.push(pad + l);
+      out.push(pad + '```', '');
+      return;
+    }
+    if (t === BT.Divider) { out.push(pad + '---', ''); return; }
+    if (t === BT.Image) {
+      const fileToken = b.image?.token || '';
+      if (downloadImage && fileToken) {
+        try {
+          const localPath = await downloadImage(fileToken, b);
+          if (localPath) { out.push(pad + `![图片](${localPath})`, ''); return; }
+        } catch { /* 下载失败,退回占位 */ }
+      }
+      out.push(pad + `![图片](feishu-image:${fileToken || '未知'})`, '');
+      return;
+    }
+    if (t === BT.Table) { renderTable(b, pad); return; }
+
+    // 生成不出 Markdown 的块(画板/嵌入电子表格/高亮块/分栏……):先尝试展开,失败则占位提示,不静默丢弃
+    if (resolveEmbed) {
+      try {
+        const resolved = await resolveEmbed(b);
+        if (resolved) {
+          for (const line of resolved.split('\n')) out.push(line ? pad + line : line);
+          return;
+        }
+      } catch { /* 展开失败,退回占位 */ }
+    }
+    const name = READ_TYPE_NAME[t] || `块类型${t}`;
+    out.push(pad + `> [${name}，本渲染器暂不支持转换为文本，请到飞书原文档查看]`, '');
+  }
+
+  async function renderChildren(ids, indent) {
+    let orderedN = 0;
+    for (const id of ids) {
+      const b = byId[id];
+      if (!b) continue;
+      orderedN = b.block_type === BT.OrderedItem ? orderedN + 1 : 0;
+      await renderBlock(b, indent, orderedN);
+    }
+  }
+
+  await renderChildren(topIds, 0);
+
+  const cleaned = [];
+  for (const line of out) {
+    if (line === '' && cleaned[cleaned.length - 1] === '') continue;
+    cleaned.push(line);
+  }
+  return cleaned.join('\n').trim() + '\n';
+}
+
 // ─── API 客户端 ─────────────────────────────────────────────────────────────
 
 export class FeishuDocWriter {
@@ -814,7 +1005,7 @@ export class FeishuDocWriter {
   }
 
   /** 插入图片：下载→创建占位block→上传→关联 */
-  async _insertImage(docToken, url, alt = '') {
+  async _insertImage(docToken, url, alt = '', index = -1) {
     // 1. 下载图片
     const imgRes = await fetch(url);
     if (!imgRes.ok) throw new Error(`Image download failed: ${imgRes.status} ${url}`);
@@ -824,7 +1015,7 @@ export class FeishuDocWriter {
     // 2. 创建占位 image block
     const insertData = await this._post(
       `/docx/v1/documents/${docToken}/blocks/${docToken}/children`,
-      { children: [{ block_type: BT.Image, image: {} }], index: -1 }
+      { children: [{ block_type: BT.Image, image: {} }], index }
     );
     const imageBlockId = insertData?.children?.[0]?.block_id;
     if (!imageBlockId) throw new Error('Failed to create image placeholder block');
@@ -869,8 +1060,11 @@ export class FeishuDocWriter {
     return children.length;
   }
 
-  /** 往文档末尾插入普通 blocks（自动分批，每批最多 50，每批间隔 400ms 避免限频） */
-  async _insert(docToken, blocks) {
+  /**
+   * 插入普通 blocks（自动分批，每批最多 50，每批间隔 400ms 避免限频）。
+   * index 省略或负数 = 追加到文末；给具体下标 = 插到该位置（patch 模式用）。
+   */
+  async _insert(docToken, blocks, index = -1) {
     const BATCH = 50;
     let total = 0;
     for (let i = 0; i < blocks.length; i += BATCH) {
@@ -878,7 +1072,7 @@ export class FeishuDocWriter {
       const batch = blocks.slice(i, i + BATCH);
       await this._post(`/docx/v1/documents/${docToken}/blocks/${docToken}/children`, {
         children: batch,
-        index: -1,
+        index: index < 0 ? -1 : index + i,
       });
       total += batch.length;
     }
@@ -915,7 +1109,7 @@ export class FeishuDocWriter {
     for (let i = 0; i < chunks.length; i++) {
       if (i > 0) await new Promise(r => setTimeout(r, 400));
       const tableData = buildTableBlocks(chunks[i]);
-      const data = await this._insertViaDescendant(docToken, tableData, parentBlockId, -1);
+      const data = await this._insertViaDescendant(docToken, tableData, parentBlockId, index < 0 ? -1 : index + i);
       results.push({
         chunk: i + 1,
         rows: chunks[i].length,
@@ -1026,6 +1220,56 @@ export class FeishuDocWriter {
       this._listBlocks(docToken),
     ]);
     return { title: doc.document?.title, block_count: blocks.length, blocks };
+  }
+
+  /** 读取文档并渲染成可读 Markdown 全文(供参考/引用场景用，供人/agent 直接阅读) */
+  async readMarkdown(docToken, opts = {}) {
+    const { title, block_count, blocks } = await this.read(docToken);
+    return { title, block_count, markdown: await blocksToMarkdown(blocks, docToken, opts) };
+  }
+
+  /** 按 file_token 下载媒体文件的原始字节(图片/上传文件都走这个 token 体系)。 */
+  async downloadMedia(fileToken) {
+    const r = await fetch(`${this.base}/drive/v1/medias/${fileToken}/download`, {
+      headers: { Authorization: `Bearer ${this.token}` },
+    });
+    if (!r.ok) throw new Error(`媒体下载失败: HTTP ${r.status} (file_token=${fileToken})`);
+    return { buffer: Buffer.from(await r.arrayBuffer()), contentType: r.headers.get('content-type') || '' };
+  }
+
+  /**
+   * 删除顶层子块区间 [start, end)（下标 = 当前子块数组位置）。
+   * 供 feishu-doc-patch.mjs 的增量更新使用；整篇清空仍走 _clear。
+   */
+  async deleteChildren(docToken, start, end) {
+    if (end <= start) return 0;
+    await this._delete(
+      `/docx/v1/documents/${docToken}/blocks/${docToken}/children/batch_delete`,
+      { start_index: start, end_index: end }
+    );
+    return end - start;
+  }
+
+  /** 原地替换某个文本类块的行内内容（不动 block_id，评论与位置都保住） */
+  async updateTextElements(docToken, blockId, elements) {
+    return this._patch(`/docx/v1/documents/${docToken}/blocks/${blockId}`, {
+      update_text_elements: { elements },
+    });
+  }
+
+  /** 在指定位置插入一批普通 blocks，index 负数 = 文末 */
+  async insertBlocksAt(docToken, blocks, index = -1) {
+    return this._insert(docToken, blocks, index);
+  }
+
+  /** 在指定位置插入一棵子树（表格 / 嵌套列表 / 引用块），index 负数 = 文末 */
+  async insertSubtree(docToken, treeData, index = -1) {
+    return this._insertViaDescendant(docToken, treeData, docToken, index);
+  }
+
+  /** 在指定位置插入一张图片（下载→占位块→上传→关联），index 负数 = 文末 */
+  async insertImageAt(docToken, url, alt = '', index = -1) {
+    return this._insertImage(docToken, url, alt, index);
   }
 
   /** 替换文档全部正文内容 */

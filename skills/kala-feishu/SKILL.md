@@ -1,7 +1,7 @@
 ---
 name: kala-feishu
-description: 用你本人的飞书身份(OAuth)读写/管理飞书云文档、知识库与两类表格。能创建/写入/追加 Markdown(标题·列表·表格·代码·图片)、管理云盘目录、浏览与新建知识库节点、读写电子表格(单元格·工作表·行列)与多维表格(记录·字段)、在文档里创建原生画板并生成节点(形状·文字·卡片版面)。支持在任意机器从零部署:agent 一步步引导用户建应用、授权、验证。当用户提到「飞书文档/云文档/云盘/知识库/wiki/写进飞书/飞书目录/飞书表格/多维表格」时触发。
-trigger_keywords: 飞书, 飞书文档, 云文档, 飞书云盘, 知识库, wiki, 写进飞书, 飞书目录, docx, 飞书表格, 电子表格, 多维表格, sheets, bitable, 表格数据, 画板, 白板, board, whiteboard, 卡片
+description: 用你本人的飞书身份(OAuth)读写/管理飞书云文档、知识库与两类表格。能创建/写入/追加 Markdown(标题·列表·表格·代码·图片)、把云文档/知识库文档全文读成可读 Markdown 供参考引用、管理云盘目录、浏览与新建知识库节点、读写电子表格(单元格·工作表·行列)与多维表格(记录·字段)、在文档里创建原生画板并生成节点(形状·文字·卡片版面)。支持在任意机器从零部署:agent 一步步引导用户建应用、授权、验证。当用户提到「飞书文档/云文档/云盘/知识库/wiki/写进飞书/飞书目录/飞书表格/多维表格/读取飞书文档」时触发。
+trigger_keywords: 飞书, 飞书文档, 云文档, 飞书云盘, 知识库, wiki, 写进飞书, 飞书目录, docx, 飞书表格, 电子表格, 多维表格, sheets, bitable, 表格数据, 画板, 白板, board, whiteboard, 卡片, 读取飞书文档, 读飞书文档, 参考文档
 allowed-tools: Bash, Read, Write, Edit, Glob
 ---
 
@@ -88,17 +88,71 @@ node "$SKILL_DIR/scripts/feishu-oauth.mjs" status
 目标可以是 docx token/链接,或**知识库节点链接/URL**(自动解析 node→obj,不用手动换 token):
 
 ```bash
-# 全量重写正文(markdown 文件)
-node "$SKILL_DIR/scripts/write-md-to-feishu.mjs" <doc_token|url> <file.md>
-# 追加
-node "$SKILL_DIR/scripts/write-md-to-feishu.mjs" <doc_token|url> <file.md> --append
+W="$SKILL_DIR/scripts/write-md-to-feishu.mjs"
+# 增量更新:只改变了的那几块 ← 改现有文档首选
+node "$W" <doc_token|url> <file.md> --patch --dry-run   # 先看计划,不动文档
+node "$W" <doc_token|url> <file.md> --patch --yes       # 计划里有删除/替换时必须带 --yes
+# 全量重写正文(清空 + 重建)
+node "$W" <doc_token|url> <file.md>
+# 追加到文末
+node "$W" <doc_token|url> <file.md> --append
 # 知识库文档:直接传 wiki 链接即可(内部自动 get_node 换 obj_token)
-node "$SKILL_DIR/scripts/write-md-to-feishu.mjs" "https://x.feishu.cn/wiki/XXXX" <file.md>
+node "$W" "https://x.feishu.cn/wiki/XXXX" <file.md>
 ```
+
+**改已有文档默认用 `--patch`,别拿全量重写当默认动作。** 全量重写是「清空正文 + 按 Markdown 重建」:
+改一个错别字也会冲掉别人在飞书里的编辑、废掉锚在旧块上的局部评论、在版本历史里留下一次全文变更,
+大文档还要删 N 块再建 N 块(每 50 块间隔 400ms)。`--patch` 先对齐现有块和新内容,
+文本类改动走原地 PATCH(block_id 不变,评论和位置都保住),只对真正变了的块动手。
+
+`--patch` 的边界(超出这些就老实说明,别当成没发生):
+- 只在**顶层块**对齐:表格改一格 = 整张表替换;嵌套列表改一项 = 该项整棵子树替换。
+- **图片按位置视为未变、不重传**(飞书那边只有 file_token,Markdown 这边只有 URL,无从比对)。
+  换了图但位置没动时,要带 `--force-images` 才会重传。
+- 文档里有 Markdown 生成不出来的块(**画板、电子表格、高亮块、分栏**)时,默认会出现在删除清单里。
+  执行前必须把清单给用户确认——尤其是画板,删了不可逆。**要原地保住它们就加 `--keep-foreign`**
+  (只改这些块周围的内容;代价是文档会比 Markdown 源多出它们,计划里会报出来)。
+  带画板的文档(会议纪要常见)默认就该用 `--keep-foreign`。
+- 有删除/替换时不带 `--yes` 会只打印计划并退出 1(和 sheets/bitable 的删除闸门同一套规矩)。
+
+计划里的符号:`~` 原地改(block_id 不变)· `±` 整块替换 · `+` 新增 · `-` 删除;`[n]` 是原文档的顶层块序号。
+想直观看这几条边界各自会怎么动,跑 `node "$SKILL_DIR/scripts/patch-demo.mjs"`(离线、不碰真文档)。
 
 支持的 Markdown:标题 H1–H6、段落、行内样式(**粗**/*斜*/~~删~~/`code`/链接)、有序·无序·**嵌套**列表、引用、代码块(70+ 语言)、分割线、**表格**(自动列宽+大表分块)、图片(`![](url)` 自动下载上传)。
 
-读文档:`node "$SKILL_DIR/scripts/feishu-doc-writer.mjs" read <doc_token>`。
+### 读取云文档全文(docx / 电子表格 / 多维表格)
+
+把一篇云文档、电子表格或多维表格读成可读 Markdown,适合直接喂给当前对话当参考资料
+(比如游戏设计讨论时引用一篇设定文档、一张数值表的全文)。目标可以传 docx/sheets/base 的
+token 或 URL,或知识库节点/wiki URL(自动识别底层是 docx/sheet/bitable 中的哪一种,resolve 出真实 token,不用手动换)。
+
+```bash
+R="$SKILL_DIR/scripts/feishu-doc-read.mjs"
+node "$R" <doc_token|url>                       # 打印全文 Markdown 到 stdout,不落盘
+node "$R" <doc_token|url> --out ref.md           # 另存一份到本地文件(仅在你确有复用/跨 session 需要时才用)
+node "$R" "https://x.feishu.cn/wiki/XXXX"        # 知识库节点:直接传 wiki 链接,自动按底层类型分发
+node "$R" <裸 sheet_token> --type sheet          # 裸 token(不带 URL)判断不了类型,电子表格/多维表格要显式指定
+node "$R" <裸 app_token> --type bitable
+```
+
+**docx**:覆盖标题、行内样式(粗/斜/删除线/code/链接)、有序·无序·嵌套列表、引用、代码块(还原语言)、
+分割线、表格。**嵌入的多维表格/电子表格块会展开成实际内容**(取它引用的那一张表/工作表,和独立读取
+用同一套裁剪规则)。画板、高亮块、分栏这类真的没有对应 Markdown 表达的块不会被静默丢弃,渲染成一行
+占位提示注明块类型,需要看这部分内容时去飞书原文档看。表格/嵌套列表只在顶层结构上还原,不追求逐字节可逆。
+若只需要原始 block JSON(供脚本二次处理,不是给人/agent 读),用底层的
+`node "$SKILL_DIR/scripts/feishu-doc-writer.mjs" read <doc_token>`。
+
+**图片**:飞书图片没有可直接访问的公网 URL,本命令会把文档里的图片**下载到本地**,Markdown 里
+引用本地文件路径(`--out ref.md` 时存到 `ref.images/`,不带 `--out` 时存到一个临时目录,命令输出
+会打印每张图的本地路径)。**脚本本身不做图像识别**——图里画的是什么,agent 拿到路径后要自己用
+Read 工具逐张查看,再把内容补进这份参考材料,这一步不会自动发生,agent 必须主动做。
+
+**电子表格/多维表格**:每张工作表/数据表渲染成一张 Markdown 表格,按 `## 工作表: xxx` /
+`## 数据表: xxx` 分节。**飞书新建时自带的默认空白网格/空字段/空模板记录会被裁掉**,不会把
+一堆空格子读进对话。默认每张表最多取前 200 行/条(和 `feishu-sheets.mjs` / `feishu-bitable.mjs`
+CLI 的默认上限一致,保护 context),超出会在文末给出用哪条命令导出全量。
+
+**不支持**:知识库节点若指向旧版「文档」(doc,非 docx)、幻灯片、思维笔记等类型,本工具不覆盖,会直接报错说明。
 
 ### 云盘运维
 

@@ -243,7 +243,7 @@ export async function resolveSheetToken(input) {
 }
 
 /** 第二个参数可以是完整区间(带 `!`)、sheet_id/工作表名(读整张)、或省略(读第一张)。 */
-async function resolveReadRange(spreadsheetToken, arg) {
+export async function resolveReadRange(spreadsheetToken, arg) {
   if (arg && arg.includes('!')) return arg;
   const sheets = await listSheets(spreadsheetToken);
   if (!sheets.length) throw new Error('这个表格里没有工作表');
@@ -255,7 +255,7 @@ async function resolveReadRange(spreadsheetToken, arg) {
 }
 
 /** 从完整区间里按行切一段。limitRows <= 0 表示到区间末尾。 */
-function sliceRange(fullRange, offsetRows, limitRows) {
+export function sliceRange(fullRange, offsetRows, limitRows) {
   const { sheetId, start, end } = parseRange(fullRange);
   const first = Math.min(start.row + offsetRows, end.row);
   const last = limitRows > 0 ? Math.min(end.row, first + limitRows - 1) : end.row;
@@ -283,7 +283,7 @@ async function readAllRows(spreadsheetToken, fullRange) {
  * 一张几千行的表全塞进对话会把上下文占满,读完也没空间干活。
  * 要全量就 --out 导出到文件(数据不进 context),要续读就 --offset。
  */
-const DEFAULT_READ_ROWS = 200;
+export const DEFAULT_READ_ROWS = 200;
 
 const USAGE = `用法: node feishu-sheets.mjs <命令> ...
 

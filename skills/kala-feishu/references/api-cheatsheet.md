@@ -26,10 +26,17 @@
 | 列块(翻页) | `GET /docx/v1/documents/{doc}/blocks?page_size=200` |
 | 追加子块 | `POST /docx/v1/documents/{doc}/blocks/{doc}/children` `{children, index:-1}` |
 | 批量删块 | `DELETE /docx/v1/documents/{doc}/blocks/{doc}/children/batch_delete` `{start_index,end_index}` |
+| **原地改文本块** | `PATCH /docx/v1/documents/{doc}/blocks/{block}` `{update_text_elements:{elements}}` |
+| 替换图片 | `PATCH /docx/v1/documents/{doc}/blocks/{block}` `{replace_image:{token,width?,height?}}` |
 | 表格/嵌套(Descendant) | `POST /docx/v1/documents/{doc}/blocks/{parent}/descendant` |
 | 图片上传 | `POST /drive/v1/medias/upload_all` (parent_type=docx_image) |
 
 > 表格靠 Descendant API 一次建整棵(cell*2+1 ≤ 999,即 cells ≤ 499),大表格自动分块——`feishu-doc-writer.mjs` 已处理。
+
+**增量更新怎么落到这几个接口**(`feishu-doc-patch.mjs`):追加子块和 Descendant 都吃 `index`(负数 = 文末),
+所以「插到中间」就是给具体下标;`batch_delete` 的 `start_index/end_index` 是**当前**子块数组的下标,
+所以一批改动必须**按下标从大到小执行**,否则前面的操作会把后面的下标顶掉。
+文本类改动走 `update_text_elements`,block_id 不变——锚在这个块上的局部评论和它在文档里的位置都不会动。
 
 ## 知识库 Wiki
 

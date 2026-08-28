@@ -25,11 +25,32 @@ node scripts/selftest.mjs
 | P4.1–4.2 | 知识库:重命名 / 树内移动 | 否(条件门) |
 | P5.1 | token 强制刷新 | 是 |
 | P5.2 | 错误码映射(无效 token → 9999166x) | 是 |
+| P13.1–13.4 | 增量更新:原地改(block_id 不变) / 插入删除后顺序 / 零改动 / CLI 闸门 | 是 |
+| P14.1 | 读取全文:全元素渲染成 Markdown | 是 |
+| P14.2 | 读取全文:不可转换块(画板等)渲染占位,不报错 | 否(依赖画板权限) |
+| P14.3–14.4 | 读取全文:CLI 传 URL / --out 存文件 | 是 |
+| P14.5–14.6 | 读取全文:电子表格/多维表格分发(--type)+ 默认空白网格/字段/记录裁剪 | 是 |
+| P14.7 | 读取全文:知识库节点按底层类型(docx/sheet/bitable)自动分发 | 否(条件门,同 P3/P4) |
+| P14.8 | 读取全文:docx 嵌入多维表格/电子表格块展开(resolveEmbed 端到端接线 + 无 resolver 时占位回退) | 是 |
 
 ### 知识库条件门
 
 P3–P4 需要:① 应用已开 `wiki:wiki` 权限并发布审核;② 存在一个你可写的知识库空间。
 缺任一 → selftest 记 `SKIP` 并打印原因(无空间 / 列空间失败)。补齐后重跑即可转绿。
+
+## 离线自检:增量更新的差异计算
+
+```bash
+node scripts/patch-selftest.mjs
+```
+
+不碰网络、不需要 token。用内存里的假文档跑「建文档 → 改 Markdown → patch」,校验两条性质:
+patch 后文档的块序列必须等于新 Markdown;标 keep / update 的块必须保住 block_id。
+重点覆盖多处同时改动——那是下标最容易漂的地方(执行必须按下标从大到小)。
+改动 `feishu-doc-patch.mjs` 后先跑这个,再跑 `selftest.mjs --only P13` 验真实 API。
+
+想看「某种情况下它到底会怎么动」,跑 `node scripts/patch-demo.mjs`:把四条边界(表格改一格、
+嵌套列表改子项、换图、文档里有画板、超 499 cells 的大表)各演示一遍,打印真实计划。同样离线。
 
 ## 手动分步(排错用)
 
@@ -45,6 +66,10 @@ node scripts/feishu-drive.mjs list                         # 拿到上面文件�
 echo "# 手测\n\n| a | b |\n|---|---|\n| 1 | 2 |" > /tmp/t.md
 node scripts/write-md-to-feishu.mjs <doc_token> /tmp/t.md
 node scripts/feishu-doc-writer.mjs read <doc_token>
+# 增量更新:改一个字后先看计划,再执行
+echo "# 手测改了\n\n| a | b |\n|---|---|\n| 1 | 2 |" > /tmp/t2.md
+node scripts/write-md-to-feishu.mjs <doc_token> /tmp/t2.md --patch --dry-run
+node scripts/write-md-to-feishu.mjs <doc_token> /tmp/t2.md --patch --yes
 node scripts/feishu-drive.mjs delete <doc_token> docx       # 清理
 
 # 知识库
