@@ -28,6 +28,9 @@
   以及一个 openclaw-managed 的 `gog` skill),重复且会造成触发歧义;kala-meeting-minutes 依赖 kala-feishu,当前部署范围仅为 Claude Code / Codex / Cursor。安装器有 `OPENCLAW_SKIP` 表自动跳过——
   **不要绕过这个跳过手动塞进 OpenClaw**。新增同类 skill 时往那张表里加一条,附跳过原因。
 - **kala-english-mode 只装 Claude Code / Codex**:辅助英语学习模式(对话内开关 + 两段式输出),两端均已实测;Cursor / OpenClaw 的等效触发未验证,安装器由 `CURSOR_SKIP` / `OPENCLAW_SKIP` 表跳过并清理历史副本。要扩展到新工具,先手工拷贝按四场景验证(开启确认 / 中文教表达 / 英文纠错 / 连续技术任务不掉格式),通过后再从对应跳过表移除。
+  - **`scripts/` 是 hook 机械兜底,不是必需品**:纯 prompt 的两段式格式在长对话里会随上下文变长/被自动压缩而衰减,`scripts/hook.mjs` 通过两端都支持的 `UserPromptSubmit` hook,在每轮消息进模型前机械补一句格式提醒 + 中文自然语言检测结果,不依赖模型"记性"。两端共用同一份 `hook.mjs`/`lib.mjs`(输入字段 `session_id`/`prompt`/`hook_event_name`、输出 `hookSpecificOutput.additionalContext` 两端一致,已用真实 `codex` 0.144.3 + 无头 `claude -p` 交叉核对)。没部署这一步不影响功能,只是退化为纯 prompt 版本。
+  - **部署方式**:`node scripts/wire-hooks.mjs`,默认 dry-run 预览,加 `--yes` 才真正合并进 `~/.claude/settings.json` / `~/.codex/hooks.json`(读-改-写合并、幂等、自动备份原文件为 `*.kala-english-mode.bak`)。**每台新设备第一次部署固定三步**:①跑 `--dry-run` 核对脚本报出的系统和文件路径;②确认后 `--yes` 写入;③按系统对应的验证清单跑一遍(macOS 见 `SKILL.md` 里的验证描述,Windows 见 `references/windows-setup.md`)——跑完 `--yes` 不代表已验证,清单必须跑。
+  - **⛔ Codex 端有一次性交互信任步骤,容易漏**:`hooks.json` 注册再正确,Codex 也要求在交互式会话里跑一次 `/hooks` 手动信任才会生效——`codex exec`(非交互)天生跳不过这一步,无法用脚本自动化验证。每台设备只需信任一次(持久化),但换设备或改了 `hook.mjs` 路径重新注册后要重新信任。Claude Code 端(user-level `settings.json`)没有这个限制,注册完立即生效——已用无头 `claude -p` 实测确认。
 - **Codex 的个人/可复用 skill 根目录是 `~/.agents/skills`**。`~/.codex/skills` 只作为系统或历史兼容目录,安装器不得向两处重复复制同名 skill。探测到 `~/.codex` 或 `~/.agents` 都说明 Codex 已安装,目标仍统一为 `~/.agents/skills`。
 - **install.sh 是覆盖式**:每个 skill 先 `rm -rf` 再 `cp`,会冲掉已装副本里的手改。装前务必 `--dry-run` 看清"新建 / 覆盖 / 跳过"。
 - **Cursor 是双轨的**:安装器按「该 skill 有没有 `scripts/` 目录」自动分流——带脚本的装进 `~/.cursor/skills/<名>/`(并登记 `_manifest.json` + 触发该目录自带的 `generate-index.ps1` 刷新 `_index.md`),纯文档的转成 `~/.cursor/commands/<名>.md`。**判断依据是目录里有没有 `scripts/`,不是硬编码 skill 名**,加新 skill 无需改这段逻辑。

@@ -13,7 +13,7 @@
 | **kala-gog** | 用你本人的 Google 身份(OAuth)读写 Gmail / 日历 / Drive / Docs / Sheets / Contacts,覆盖个人号与 Garena 工作号两个账号。底层是本地 `gog` CLI。含从零部署引导(装 CLI → 配 OAuth 客户端 → 逐账号授权 → 冒烟)与 Windows 指南。 |
 | **kala-meeting-minutes** | 根据会议录音转录、白板和样例纪要生成证据可追溯、范围准确、视觉可验收的会议纪要。发布到飞书时依赖 kala-feishu；无飞书能力时生成可换设备继续发布的本地纪要包。 |
 | **kala-design-doc** | 创建、编辑、改写或审核中文功能设计文档。用语义底账防止措辞优化改变原意，并检查职责越界、语义重复、抽象术语、无效举例和不必要的技术细节。 |
-| **kala-english-mode** | 辅助英语学习模式:对话内开关(自然语言或 `/kala-english-mode`)。开启后每条回复两段式——先给英语表达反馈(中文输入→教地道说法,英文输入→纠错),再正常回答;基础档【回答】为英文 TL;DR + 中文详解,挑战档全英文。仅当前对话生效,新 session 需重开。 |
+| **kala-english-mode** | 辅助英语学习模式:本机 Claude Code / Codex 每个新 session 默认开启基础档,也可用自然语言或 `/kala-english-mode` 切换。开启后每条回复两段式——先给英语表达反馈(中文输入→教地道说法,英文输入→纠错),再正常回答;基础档【回答】为英文 TL;DR + 中文详解,挑战档全英文。关闭只影响当前对话。 |
 
 仓库还维护一份不属于 Skill 的[全局对话表达规范](global-instructions/dialogue-style.md)。它负责日常问答的直答、非技术表达和信息密度；`kala-design-doc` 只在实际创建、修改或审核设计文档时运行。
 
@@ -25,7 +25,7 @@
 
 > **kala-meeting-minutes 说明**:它带 `scripts/`、`references/` 和 `assets/`,在三端都安装为真正的 skill 目录。飞书读取、账号路由、图片、画板和文档块操作统一复用 kala-feishu,不另存凭证。没有飞书能力时,默认在当前项目 `.meeting-minutes/<日期>-<主题>/` 生成正文、证据映射、HTML 预览、视觉资产、发布计划和 QA 报告;不在项目中时使用 `~/Documents/Kala/MeetingMinutes/`。当前不装到 OpenClaw。
 
-> **kala-english-mode 说明**:纯文档 skill(无 `scripts/`),零部署依赖。当前只装 Claude Code / Codex(两端已实测);Cursor / OpenClaw 的等效触发未验证,安装器自动跳过。Codex 侧没有斜杠命令,用 `$` 提及或自然语言(「打开英语学习模式」)开启。
+> **kala-english-mode 说明**:核心是纯 prompt 的对话内开关,零部署也能用。它带一个可选的 `scripts/`——用 `UserPromptSubmit` hook 在 Claude Code / Codex 里机械补一句格式提醒和中文检测结果,防止长对话里模式"记性变差";部署一次即可(`node scripts/wire-hooks.mjs`,见 SKILL.md),不部署不影响基础功能。本机 Claude Code / Codex 每个新 session 默认开启基础档,关闭只影响当前对话;Cursor / OpenClaw 的等效触发未验证,安装器自动跳过。Codex 侧没有斜杠命令,用 `$` 提及或自然语言切换档位或关闭。
 
 ## 安装
 
