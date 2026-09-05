@@ -126,7 +126,7 @@ export function buildReminder(state, promptText) {
   ];
   if (hasChineseNaturalLanguage(promptText)) {
     lines.push(
-      '本条输入检测到中文自然语言片段（代码块/行内代码除外）：【English Coach】必须按"用户用了中文"处理并给出反馈，不能因为其余部分是英文或代码就跳过。'
+      '本条输入检测到中文自然语言片段（代码块/行内代码除外）：【English Coach】必须按"用户用了中文"处理并给出反馈，不能因为其余部分是英文或代码就跳过。主推的那句英文建议必须整句都是英文，不能把中文词组原样嵌在里面（哪怕是专有名词/术语），拿不准就给一个合理的英文对应词，中文原词放进后面的关键词汇解释里。'
     );
   }
   return lines.join('\n');

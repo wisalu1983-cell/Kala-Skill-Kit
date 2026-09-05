@@ -2,8 +2,8 @@
 // kala-english-mode 的离线自检——纯本地逻辑，不依赖网络/真实 Claude Code / Codex。
 // 覆盖 lib.mjs 的纯函数和 hook.mjs 的 stdin/stdout 契约。跑法：node scripts/selftest.mjs
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,7 +35,10 @@ function runHook(payload) {
 
 // 每个测试用独立临时目录隔离状态/偏好，不污染这台机器的真实运行期文件。
 const scratch = mkdtempSync(join(tmpdir(), 'kala-english-mode-selftest-'));
-process.env.HOME = scratch; // homedir() 读这个；tmpdir() 走系统真实临时目录，session id 天然隔离不冲突
+// homedir() 在 POSIX 读 HOME、在 Windows 读 USERPROFILE，两个都要改掉，
+// 否则 Windows 上自检会读写这台机器真实的 ~/.kala 个人偏好。tmpdir() 走系统真实临时目录，session id 天然隔离不冲突。
+process.env.HOME = scratch;
+process.env.USERPROFILE = scratch;
 
 const { detectToggle, hasChineseNaturalLanguage, buildReminder, getOrInitState, writePreferences } = await import(
   './lib.mjs'
@@ -87,6 +90,13 @@ check(
 );
 check('机械提醒·挑战档不应出现"英文摘要"这类基础档专属措辞', !/英文摘要/.test(challengeReminder));
 
+const mixedZhReminder = buildReminder({ enabled: true, tier: 'basic' }, '帮我看看任务分配');
+check(
+  '机械提醒·检测到中文时要求主推英文建议整句都是英文,不能嵌中文词',
+  /整句都是英文/.test(mixedZhReminder) && /中文词组/.test(mixedZhReminder),
+  `实际内容:${JSON.stringify(mixedZhReminder)}`
+);
+
 // ---- 个人偏好默认值 ----
 writePreferences({ defaultEnabled: true, defaultTier: 'challenge' });
 const freshState = getOrInitState(`selftest-fresh-${Date.now()}-${Math.random()}`);
@@ -100,10 +110,10 @@ check(
 check('hook·非法 JSON 不崩溃且无输出', runHook('not json') === '');
 check('hook·缺 session_id 无输出', runHook({ hook_event_name: 'UserPromptSubmit', prompt: '你好' }) === '');
 
-// hook.mjs 子进程读 homedir() 走的是自己的 process.env.HOME，这里显式给它建好个人偏好文件。
+// hook.mjs 子进程读自己的 homedir()，继承的正是上面改过的 HOME / USERPROFILE，这里显式给它建好个人偏好文件。
 {
-  const dir = join(process.env.HOME, '.kala', 'english-mode');
-  execFileSync('mkdir', ['-p', dir]);
+  const dir = join(homedir(), '.kala', 'english-mode');
+  mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'config.json'), JSON.stringify({ defaultEnabled: true, defaultTier: 'basic' }) + '\n');
 }
 
@@ -150,7 +160,8 @@ check('hook·缺 session_id 无输出', runHook({ hook_event_name: 'UserPromptSu
   const WIRE = join(__dirname, 'wire-hooks.mjs');
   const claudeHookInstalled = join(scratch, '.claude', 'skills', 'kala-english-mode', 'scripts', 'hook.mjs');
   const codexHookInstalled = join(scratch, '.agents', 'skills', 'kala-english-mode', 'scripts', 'hook.mjs');
-  execFileSync('mkdir', ['-p', dirname(claudeHookInstalled), dirname(codexHookInstalled)]);
+  mkdirSync(dirname(claudeHookInstalled), { recursive: true });
+  mkdirSync(dirname(codexHookInstalled), { recursive: true });
   writeFileSync(claudeHookInstalled, '// fake installed hook.mjs for selftest\n');
   writeFileSync(codexHookInstalled, '// fake installed hook.mjs for selftest\n');
 
@@ -172,9 +183,9 @@ check('hook·缺 session_id 无输出', runHook({ hook_event_name: 'UserPromptSu
     )
   );
 
-  execFileSync('node', [WIRE, '--yes'], { env: { ...process.env, HOME: scratch }, encoding: 'utf8' });
+  execFileSync('node', [WIRE, '--yes'], { env: { ...process.env, HOME: scratch, USERPROFILE: scratch }, encoding: 'utf8' });
 
-  const after = JSON.parse(execFileSync('cat', [claudeSettingsPath], { encoding: 'utf8' }));
+  const after = JSON.parse(readFileSync(claudeSettingsPath, 'utf8'));
   const entries = after.hooks?.UserPromptSubmit || [];
   check('wire-hooks·同一 skill 的旧条目原地替换，不重复追加', entries.length === 1, `实际条目数:${entries.length}`);
   check(
@@ -185,8 +196,8 @@ check('hook·缺 session_id 无输出', runHook({ hook_event_name: 'UserPromptSu
   check('wire-hooks·config 里原有的其它字段(model)保持不变', after.model === 'opus');
 
   // 再跑一次，应保持幂等：条目数不变、command 不变。
-  execFileSync('node', [WIRE, '--yes'], { env: { ...process.env, HOME: scratch }, encoding: 'utf8' });
-  const afterTwice = JSON.parse(execFileSync('cat', [claudeSettingsPath], { encoding: 'utf8' }));
+  execFileSync('node', [WIRE, '--yes'], { env: { ...process.env, HOME: scratch, USERPROFILE: scratch }, encoding: 'utf8' });
+  const afterTwice = JSON.parse(readFileSync(claudeSettingsPath, 'utf8'));
   check(
     'wire-hooks·重跑幂等，不会再产生第二条',
     (afterTwice.hooks?.UserPromptSubmit || []).length === 1
