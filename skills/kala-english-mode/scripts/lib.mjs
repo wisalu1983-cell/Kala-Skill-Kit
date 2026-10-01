@@ -104,12 +104,13 @@ const BASIC_PATTERNS = [/第二部分换回中文/, /换回中文/];
 // 返回 null（无匹配，state 不变）或 { enabled?, tier? }（部分字段，与现有 state 合并）。
 export function detectToggle(promptText) {
   if (!promptText) return null;
-  if (OFF_PATTERNS.some((re) => re.test(promptText))) return { enabled: false };
-  if (ON_PATTERNS.some((re) => re.test(promptText))) {
-    return { enabled: true, tier: CHALLENGE_PATTERNS.some((re) => re.test(promptText)) ? 'challenge' : 'basic' };
+  const text = stripCodeAndQuotes(promptText);
+  if (OFF_PATTERNS.some((re) => re.test(text))) return { enabled: false };
+  if (ON_PATTERNS.some((re) => re.test(text))) {
+    return { enabled: true, tier: CHALLENGE_PATTERNS.some((re) => re.test(text)) ? 'challenge' : 'basic' };
   }
-  if (CHALLENGE_PATTERNS.some((re) => re.test(promptText))) return { tier: 'challenge' };
-  if (BASIC_PATTERNS.some((re) => re.test(promptText))) return { tier: 'basic' };
+  if (CHALLENGE_PATTERNS.some((re) => re.test(text))) return { tier: 'challenge' };
+  if (BASIC_PATTERNS.some((re) => re.test(text))) return { tier: 'basic' };
   return null;
 }
 

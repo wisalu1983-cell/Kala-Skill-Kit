@@ -59,6 +59,10 @@ check(
   '开关识别·打开+切挑战档一步到位',
   JSON.stringify(detectToggle('打开英语学习模式,用全英文回答')) === JSON.stringify({ enabled: true, tier: 'challenge' })
 );
+check(
+  '开关识别·引用块里的开关短语不算(引用回复会带回助手原话)',
+  detectToggle('> 从你说"关闭英语模式"开始\n\n这段是什么意思') === null
+);
 check('开关识别·无匹配返回 null', detectToggle('随便聊聊') === null);
 check('开关识别·空输入返回 null', detectToggle('') === null);
 

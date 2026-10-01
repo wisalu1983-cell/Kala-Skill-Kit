@@ -68,14 +68,17 @@ function loadJsonIfExists(path) {
 // 识别"这是不是 kala-english-mode 的 hook"，按路径的固定后缀匹配，不看绝对路径前缀——
 // 这样不管旧注册指向的是仓库路径、旧安装路径还是别的机器路径，都能认出来并在原地替换，
 // 不会因为前缀不同就被当成两条不同的 hook 而重复注册。
-const IDENTITY_SUFFIX = join('kala-english-mode', 'scripts', 'hook.mjs');
+// 统一按正斜杠比较：Windows 上 join() 拼出反斜杠，会认不出正斜杠写法的旧条目而重复追加。
+const IDENTITY_SUFFIX = 'kala-english-mode/scripts/hook.mjs';
 
 function findEntryIndex(entries) {
   if (!Array.isArray(entries)) return -1;
   return entries.findIndex(
     (entry) =>
       Array.isArray(entry.hooks) &&
-      entry.hooks.some((h) => typeof h.command === 'string' && h.command.includes(IDENTITY_SUFFIX))
+      entry.hooks.some(
+        (h) => typeof h.command === 'string' && h.command.replace(/\\/g, '/').includes(IDENTITY_SUFFIX)
+      )
   );
 }
 
