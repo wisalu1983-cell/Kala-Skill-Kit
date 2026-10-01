@@ -91,10 +91,9 @@ export function hasChineseNaturalLanguage(promptText) {
 
 // --- 开关 / 切档识别（覆盖 SKILL.md 里列出的触发短语，宽松匹配） ---
 
-const OFF_PATTERNS = [/关闭英语学习模式/, /english mode off/i];
+const OFF_PATTERNS = [/关闭英语(?:学习)?模式/, /english mode off/i];
 const ON_PATTERNS = [
-  /打开英语学习模式/,
-  /开启英语学习模式/,
+  /(?:打开|开启)英语(?:学习)?模式/,
   /english mode on/i,
   /练英语/,
   /进入英语练习模式/,

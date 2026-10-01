@@ -48,6 +48,14 @@ const { detectToggle, hasChineseNaturalLanguage, buildReminder, getOrInitState, 
 check('开关识别·打开', JSON.stringify(detectToggle('打开英语学习模式')) === JSON.stringify({ enabled: true, tier: 'basic' }));
 check('开关识别·关闭', JSON.stringify(detectToggle('关闭英语学习模式')) === JSON.stringify({ enabled: false }));
 check(
+  '开关识别·关闭(口语简称,缺"学习"二字)',
+  JSON.stringify(detectToggle('关闭英语模式')) === JSON.stringify({ enabled: false })
+);
+check(
+  '开关识别·打开(口语简称,缺"学习"二字)',
+  JSON.stringify(detectToggle('打开英语模式')) === JSON.stringify({ enabled: true, tier: 'basic' })
+);
+check(
   '开关识别·打开+切挑战档一步到位',
   JSON.stringify(detectToggle('打开英语学习模式,用全英文回答')) === JSON.stringify({ enabled: true, tier: 'challenge' })
 );
