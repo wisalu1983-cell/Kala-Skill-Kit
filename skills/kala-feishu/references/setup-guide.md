@@ -67,7 +67,7 @@ node scripts/feishu-oauth.mjs auth
 node scripts/selftest.mjs
 ```
 
-跑完全部能力并自动清理。P0–P2、P5 必须全绿。若本机没有可写知识库空间,P3–P4 会记 SKIP(见步骤 7)。
+跑完全部能力并自动清理。通过标准以 SKILL.md「自检」节为准(P0–P2、P5–P12 全绿)。若本机没有可写知识库空间,P3–P4 会记 SKIP(见步骤 7)。
 
 ## 步骤 7 — 记住目标位置(agent 做)
 
